@@ -30,6 +30,8 @@ Each module's README describes its scope; the PRD's Appendix C maps every requir
 
 Branch names: `a/<short-topic>`, `b/<short-topic>`, `c/<short-topic>`, `guide/<short-topic>`.
 
+The full GitHub and review process — setup, daily flow, how to review, checks and troubleshooting — is in [`docs/REVIEW-PROCESS.md`](docs/REVIEW-PROCESS.md).
+
 ## First-time setup (each student)
 
 1. On GitHub: **Settings → Emails →** turn on *Keep my email addresses private* and *Block command line pushes that expose my email*. Commit with your `@users.noreply.github.com` address.
