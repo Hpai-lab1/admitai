@@ -1,0 +1,17 @@
+openapi: 3.1.0
+info:
+  title: AdmitAI Assistant API (Module B)
+  version: 0.1.0-draft
+  description: Stub listing the agreed endpoints. Schemas are filled in during week 1 and frozen at the end of week 2.
+paths:
+  /chat/{conversation_id}/messages:
+    post:
+      summary: Send a user message; streams checked sentences with citations and events (handoff_requested, lead_prompt, consent_required)
+      parameters:
+        - { name: conversation_id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Server-sent event stream }
+  /voice/token:
+    post: { summary: Issue a short-lived WebRTC room token for a voice session, responses: { "200": { description: Token } } }
+  /channels/whatsapp/webhook:
+    post: { summary: Inbound WhatsApp messages and status updates (signature-verified), responses: { "200": { description: Accepted } } }

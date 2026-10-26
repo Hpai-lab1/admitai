@@ -1,0 +1,20 @@
+openapi: 3.1.0
+info:
+  title: AdmitAI Experience API (Module C)
+  version: 0.1.0-draft
+  description: Stub listing the agreed endpoints. Schemas are filled in during week 1 and frozen at the end of week 2.
+paths:
+  /handoffs:
+    post: { summary: Create a handoff or callback task with its context package (called by Module B), responses: { "201": { description: Created } } }
+    get: { summary: Queue of handoffs and callbacks by role and department, responses: { "200": { description: Handoffs } } }
+  /consents:
+    post: { summary: Record consent, including guardian verification for minors, responses: { "201": { description: Created } } }
+  /leads:
+    post: { summary: Create a consented lead (called by Module B), responses: { "201": { description: Created } } }
+    get: { summary: Lead list with filters and pipeline stage, responses: { "200": { description: Leads } } }
+  /feedback:
+    post: { summary: Record a rating or reason for an answer (emits feedback.created to Module A), responses: { "201": { description: Created } } }
+  /corrections:
+    post: { summary: Staff correction of an answer (emits correction.submitted to Module A), responses: { "201": { description: Created } } }
+  /analytics/overview:
+    get: { summary: Dashboard data, responses: { "200": { description: Metrics } } }

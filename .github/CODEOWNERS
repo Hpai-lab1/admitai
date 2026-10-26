@@ -1,0 +1,16 @@
+# Owners are requested for review on changes to their paths. The last matching rule wins.
+# Code-owner review is required by the protect-main ruleset on this public repository.
+
+*               @narenccode
+
+/knowledge/     @adityadk03
+# TODO: replace @narenccode with the Module B owner once their invitation is accepted
+/assistant/     @narenccode
+/experience/    @ramitharavichandra
+
+/contracts/     @narenccode
+/deploy/        @narenccode
+/SECURITY.md    @narenccode
+/eval-data/     @narenccode @adityadk03
+/.github/       @narenccode
+/CLAUDE.md      @narenccode

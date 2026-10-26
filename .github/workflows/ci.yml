@@ -1,0 +1,42 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Read-only token: this workflow never writes to the repository.
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    # GitHub-hosted runner only. Never use a self-hosted runner on this public repository.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Pre-commit (format, lint, secret scan)
+        run: |
+          pip install pre-commit
+          SKIP=no-commit-to-branch pre-commit run --all-files
+
+      - name: Validate contracts parse
+        run: |
+          pip install pyyaml
+          python -c "import glob, yaml; [yaml.safe_load(open(f, encoding='utf-8')) for f in glob.glob('contracts/*.yaml')]; print('contracts ok')"
+
+      - name: Python unit tests
+        run: |
+          if ls -d */tests >/dev/null 2>&1; then
+            for req in */requirements*.txt; do [ -f "$req" ] && pip install -r "$req"; done
+            pip install pytest && pytest -q
+          else
+            echo "no Python tests yet"
+          fi

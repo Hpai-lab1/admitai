@@ -1,0 +1,31 @@
+openapi: 3.1.0
+info:
+  title: AdmitAI Knowledge API (Module A)
+  version: 0.1.0-draft
+  description: Stub listing the agreed endpoints. Schemas are filled in during week 1 and frozen at the end of week 2.
+paths:
+  /kb/search:
+    post:
+      summary: Hybrid search with reranking (tenant, query, role, department, academic_year, top_k); returns chunks with citation metadata and scores
+      responses:
+        "200": { description: Ranked chunks with citations }
+  /catalogue/programs/{program_id}/facts:
+    get:
+      summary: Authoritative structured facts (fees, dates, eligibility, intake) for one program
+      parameters:
+        - { name: program_id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Program facts }
+  /curated-qa:
+    get: { summary: List curated answers, responses: { "200": { description: Curated answers } } }
+    post: { summary: Create a draft curated answer (e.g. from an approved correction), responses: { "201": { description: Created } } }
+  /kb/sources:
+    post: { summary: Register a document upload or website crawl source, responses: { "201": { description: Created } } }
+  /kb/documents:
+    get: { summary: List documents with status, academic year and owner, responses: { "200": { description: Documents } } }
+  /tenant-pack:
+    post: { summary: Import and validate a Tenant Pack; returns a readiness checklist, responses: { "200": { description: Readiness result } } }
+  /improvements:
+    get: { summary: Improvement proposals ranked by impact score, responses: { "200": { description: Proposals } } }
+  /evals/runs:
+    post: { summary: Start a test-set run against a given set of versions, responses: { "202": { description: Run started } } }

@@ -1,0 +1,44 @@
+# Secrets and local config
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+
+# Node
+node_modules/
+.next/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Data and models (never commit)
+*.gguf
+*.safetensors
+models/
+data/raw/
+eval-data/raw/
+*.sqlite
+*.db
+
+# Office lock files and OS noise
+~$*
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+
+# Personal Claude Code overrides
+.claude/settings.local.json
+CLAUDE.local.md
