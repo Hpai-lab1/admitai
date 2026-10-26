@@ -1,0 +1,32 @@
+name: guide-gate
+
+# Runs the workflow and script from the base branch (pull_request_target) and never checks out
+# or executes code from the pull request: it only reads the PR's files and diff through the API.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: guide-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  guide-gate:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4   # base branch only (default for pull_request_target)
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check for high-level violations and request peer reviewers
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          EVENT_ACTION: ${{ github.event.action }}
+          GUIDE: narenccode
+        run: python .github/scripts/guide_gate.py

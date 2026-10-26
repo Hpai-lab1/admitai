@@ -15,7 +15,8 @@
 
 ## Checklist
 
-- [ ] Changes stay inside my module's folder (or the owner of the other folder is requested for review)
+- [ ] Changes stay inside my module's folder (if not, that module's owner is asked to review automatically)
+- [ ] A teammate is requested as reviewer (guide-gate does this automatically when you open the PR)
 - [ ] Tests added or updated, and they pass
 - [ ] API still matches its contract in `contracts/` (or a contract change is proposed separately)
 - [ ] No real applicant data, secrets or keys in the diff
