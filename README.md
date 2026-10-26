@@ -9,7 +9,7 @@ This repository is the **Level 1 (MVP)** build: a PG project at the HPAI Lab, bu
 | Folder | Module | Owner |
 |---|---|---|
 | [`knowledge/`](knowledge/) | **A — Knowledge & Learning** | @adityadk03 |
-| [`assistant/`](assistant/) | **B — Assistant Engine & Channels** | to be added |
+| [`assistant/`](assistant/) | **B — Assistant Engine & Channels** | @koushikkumar2004 |
 | [`experience/`](experience/) | **C — Experience & Operations** | @ramitharavichandra |
 | [`contracts/`](contracts/), [`deploy/`](deploy/), `.github/` | **0 — Guide** | @narenccode |
 | [`eval-data/`](eval-data/) | Shared test set | Guide + Module A |
@@ -18,12 +18,15 @@ Each module's README describes its scope; the PRD's Appendix C maps every requir
 
 ## Working agreement
 
-1. **Never push to `main`** — it is protected. Create a branch, open a pull request, get one approval, and pass CI.
-2. **Stay in your folder.** Changes to another module's folder need that owner's review; changes to `contracts/`, `deploy/` and `.github/` need the guide's.
-3. **Modules talk only through the contracts** in `contracts/` — no reading another module's database tables.
-4. **This repository is public.** Never commit secrets, real applicant data, server addresses, account names or anything from the private repository.
-5. **Every pull request** has a description, links its issue (requirement ID), and includes tests.
-6. **Read [`CLAUDE.md`](CLAUDE.md)** before your first Claude Code session, and [`SECURITY.md`](SECURITY.md) once.
+1. **Never push to `main`** — it is protected. Create a branch, open a pull request, get **one teammate's approval**, and pass the checks; then the author merges. The guide is not needed for normal work.
+2. **Stay in your folder.** If you must change another module's folder, its owner is asked to review automatically.
+3. **The guide is involved only when it matters:**
+   - changes to shared or sensitive paths (`contracts/`, `deploy/`, `eval-data/`, `.github/`, `.claude/`, `CLAUDE.md`, `SECURITY.md`, `.gitignore`, `.pre-commit-config.yaml`) need the guide's approval, requested automatically;
+   - the **guide-gate** check blocks a PR and alerts the guide if it finds something that looks like a secret, a real phone number or e-mail, an internal IP address, a `.env` file, or a document or data file. Remove it and push again, or ask the guide to clear a false positive.
+4. **Modules talk only through the contracts** in `contracts/` — no reading another module's database tables.
+5. **This repository is public.** Never commit secrets, real applicant data, server addresses, account names or anything from the private repository.
+6. **Every pull request** has a description, links its issue (requirement ID), and includes tests.
+7. **Read [`CLAUDE.md`](CLAUDE.md)** before your first Claude Code session, and [`SECURITY.md`](SECURITY.md) once.
 
 Branch names: `a/<short-topic>`, `b/<short-topic>`, `c/<short-topic>`, `guide/<short-topic>`.
 
