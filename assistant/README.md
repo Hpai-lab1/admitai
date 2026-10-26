@@ -1,6 +1,6 @@
 # Module B — Assistant Engine & Channels
 
-**Owner:** to be added · **Database schema:** `chat` · **PRD:** sections 7, 9.2–9.5, 21.2, Appendix C
+**Owner:** @koushikkumar2004 · **Database schema:** `chat` · **PRD:** sections 7, 9.2–9.5, 21.2, Appendix C
 
 **Mission:** turn a question on any channel into a fast, grounded, safe answer — or the right handoff.
 

@@ -9,7 +9,7 @@ This repository is the **Level 1 (MVP)** build: a PG project at the HPAI Lab, bu
 | Folder | Module | Owner |
 |---|---|---|
 | [`knowledge/`](knowledge/) | **A — Knowledge & Learning** | @adityadk03 |
-| [`assistant/`](assistant/) | **B — Assistant Engine & Channels** | to be added |
+| [`assistant/`](assistant/) | **B — Assistant Engine & Channels** | @koushikkumar2004 |
 | [`experience/`](experience/) | **C — Experience & Operations** | @ramitharavichandra |
 | [`contracts/`](contracts/), [`deploy/`](deploy/), `.github/` | **0 — Guide** | @narenccode |
 | [`eval-data/`](eval-data/) | Shared test set | Guide + Module A |
