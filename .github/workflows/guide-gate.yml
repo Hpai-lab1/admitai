@@ -19,7 +19,7 @@ jobs:
   guide-gate:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4   # base branch only (default for pull_request_target)
+      - uses: actions/checkout@v7   # base branch only (default for pull_request_target)
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
