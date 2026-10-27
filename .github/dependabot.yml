@@ -1,8 +1,0 @@
-version: 2
-updates:
-  - package-ecosystem: github-actions
-    directory: "/"
-    schedule:
-      interval: weekly
-  # Add pip (knowledge/, assistant/, experience/) and npm (experience/) entries
-  # once those folders contain requirements or package.json files.
