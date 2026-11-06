@@ -1,0 +1,40 @@
+{
+  "name": "admitai-experience-web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -H 127.0.0.1 -p 8210",
+    "build": "next build",
+    "start": "next start -H 127.0.0.1 -p 8210",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "next": "16.4.3",
+    "qrcode": "1.5.4",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "10.4.0",
+    "@testing-library/jest-dom": "6.6.2",
+    "@testing-library/react": "16.0.1",
+    "@types/node": "20.16.11",
+    "@types/qrcode": "1.5.5",
+    "@types/react": "18.3.11",
+    "@types/react-dom": "18.3.1",
+    "@vitejs/plugin-react": "4.3.2",
+    "autoprefixer": "10.4.20",
+    "eslint": "9.13.0",
+    "eslint-config-next": "16.4.3",
+    "eslint-config-prettier": "9.1.0",
+    "jsdom": "25.0.1",
+    "postcss": "8.4.47",
+    "prettier": "3.3.3",
+    "tailwindcss": "3.4.14",
+    "typescript": "5.6.3",
+    "vitest": "2.1.3"
+  }
+}
