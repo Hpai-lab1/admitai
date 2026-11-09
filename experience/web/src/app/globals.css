@@ -1,0 +1,129 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand: 30 58 138;
+  --brand2: 59 130 246;
+  --accent: 17 24 39;
+  --brand-on-dark: 147 197 253;
+  --brand2-on-dark: 147 197 253;
+  --accent-on-dark: 196 181 253;
+  --on-brand: #ffffff;
+  --brand-font: system-ui, sans-serif;
+  --text-scale: 1;
+}
+
+/* Neutral colours. Dark mode follows the system, or the console's manual toggle (class on <html>).
+   The demo college site wraps itself in .light because it stands in for the college's own page. */
+:root,
+.light {
+  --c-surface: 255 255 255;
+  --c-paper: 246 246 246;
+  --c-ink: 49 49 49;
+  --c-muted: 75 85 99;
+  --c-line: 229 231 235;
+  --c-subtle: 243 244 246;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --c-surface: 30 30 36;
+    --c-paper: 18 18 22;
+    --c-ink: 236 236 241;
+    --c-muted: 168 172 184;
+    --c-line: 58 58 68;
+    --c-subtle: 44 44 54;
+    color-scheme: dark;
+  }
+  :root:not(.light) body .text-brand:not(.light *) {
+    color: rgb(var(--brand-on-dark));
+  }
+  :root:not(.light) body .text-brand2:not(.light *) {
+    color: rgb(var(--brand2-on-dark));
+  }
+  :root:not(.light) body .text-accent:not(.light *):not(.bg-white) {
+    color: rgb(var(--accent-on-dark));
+  }
+}
+
+:root.dark {
+  --c-surface: 30 30 36;
+  --c-paper: 18 18 22;
+  --c-ink: 236 236 241;
+  --c-muted: 168 172 184;
+  --c-line: 58 58 68;
+  --c-subtle: 44 44 54;
+  color-scheme: dark;
+}
+:root.dark body .text-brand:not(.light *) {
+  color: rgb(var(--brand-on-dark));
+}
+:root.dark body .text-brand2:not(.light *) {
+  color: rgb(var(--brand2-on-dark));
+}
+:root.dark body .text-accent:not(.light *):not(.bg-white) {
+  color: rgb(var(--accent-on-dark));
+}
+
+html {
+  font-size: calc(16px * var(--text-scale));
+}
+
+body {
+  @apply bg-surface text-ink antialiased;
+  font-family: var(--brand-font);
+}
+
+@layer components {
+  .brand-gradient {
+    background-image: linear-gradient(113deg, rgb(var(--brand)) 0%, rgb(var(--brand2)) 100%);
+    color: var(--on-brand);
+  }
+  .btn {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-btn px-4 py-2 text-sm font-semibold transition
+      focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent
+      disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-brand hover:brightness-95;
+    color: var(--on-brand);
+  }
+  .btn-secondary {
+    @apply btn border border-brand2 bg-white text-brand2 hover:bg-brand2/5;
+  }
+  .btn-ghost {
+    @apply btn text-ink hover:bg-black/5;
+  }
+  .field {
+    @apply min-h-11 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-muted
+      focus:border-brand2 focus:outline-none focus:ring-2 focus:ring-brand2/30;
+  }
+  .label {
+    @apply mb-1 block text-sm font-medium text-ink;
+  }
+  .card {
+    @apply rounded-xl border border-line bg-surface shadow-sm;
+  }
+  .chip {
+    @apply inline-flex min-h-11 items-center rounded-full border border-brand2/40 bg-surface px-3 py-1 text-sm text-brand2 transition hover:bg-brand2
+      hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand2;
+  }
+}
+
+.sr-only-focusable:not(:focus) {
+  @apply sr-only;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* loading skeletons (PRD 13.4: skeletons, not spinners, for lists) */
+.skeleton {
+  @apply animate-pulse rounded-lg bg-subtle;
+}
