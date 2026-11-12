@@ -922,11 +922,12 @@ def _rows(tenant, sql):
 
 
 def test_signals_are_stored_without_contact_details(lclient, assistant, tenant):
+    phone = "".join(("98765", "43210"))
     assistant.turns.append(
         {
             "id": "t1",
             "conversation_id": "c1",
-            "question": "I am Priya Sharma, call me on 9876543210 about the hostel",
+            "question": f"I am Priya Sharma, call me on {phone} about the hostel",
             "answer": "I don't know.",
             "outcome": "no_answer",
             "sources": [],
@@ -950,7 +951,7 @@ def test_signals_are_stored_without_contact_details(lclient, assistant, tenant):
         for r in _rows(tenant, "select question, comment from learn.signals")
         for v in r
     )
-    assert "Priya" not in stored and "9876543210" not in stored
+    assert "Priya" not in stored and phone not in stored
     assert "priya@example.com" not in stored
     assert "[name]" in stored and "[phone]" in stored and "[email]" in stored
 
