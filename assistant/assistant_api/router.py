@@ -220,7 +220,10 @@ EXPLICIT_HUMAN = re.compile(
     re.IGNORECASE,
 )
 _SPLIT = re.compile(
-    r"\?\s+|\s+(?:and also|also|and|plus|aur|और)\s+(?=(?:what|how|is|are|can|do|does|which|when|"
+    # One space before the joining word, not a run: a run of spaces matched from every space in it
+    # was quadratic on long runs (CodeQL py/polynomial-redos). Extra spaces now stay at the end of
+    # the part before, which is trimmed anyway; the parts are otherwise the same.
+    r"\?\s+|\s(?:and also|also|and|plus|aur|और)\s+(?=(?:what|how|is|are|can|do|does|which|when|"
     r"where|will|tell|kya|क्या)\b)",
     re.IGNORECASE,
 )

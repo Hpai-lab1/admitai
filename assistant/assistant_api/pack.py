@@ -96,4 +96,7 @@ if __name__ == "__main__":
     s = Settings()
     if not s.database_url:
         sys.exit("Set CHAT_DATABASE_URL (source local.env.sh)")
-    print(load(s, a.tenant_id, a.pack))
+    report = load(s, a.tenant_id, a.pack)
+    # Only what an operator needs: the business number's id stays out of logs.
+    whatsapp = "registered" if "whatsapp" in report else "not configured"
+    print({"version": report["version"], "whatsapp": whatsapp})

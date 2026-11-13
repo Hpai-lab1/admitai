@@ -9,7 +9,10 @@ import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
 
-_EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+# The part before "@" is at most 64 characters (the limit for a real address), so a long word
+# with no "@" costs 64 steps per letter instead of the whole word per letter (quadratic before;
+# CodeQL py/polynomial-redos). Matches are unchanged for every address of a legal length.
+_EMAIL = re.compile(r"[\w.+-]{1,64}@[\w-]+\.[\w.-]+")
 _PHONE = re.compile(r"(?<!\d)(?:\+?91[\s-]?)?[6-9]\d{4}[\s-]?\d{5}(?!\d)")
 _AADHAAR = re.compile(r"(?<!\d)\d{4}\s?\d{4}\s?\d{4}(?!\d)")
 
