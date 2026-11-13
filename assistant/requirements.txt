@@ -1,0 +1,16 @@
+fastapi==0.115.6
+uvicorn==0.32.1
+pydantic==2.10.4
+psycopg[binary]==3.2.3
+psycopg-pool==3.2.4
+httpx==0.28.1
+pyjwt==2.10.1
+pyyaml==6.0.2
+tzdata==2025.2      # time zones on Windows, which has no system database (office hours)
+python-multipart==0.0.20
+# Voice (F2): local speech-to-text and text-to-speech
+faster-whisper==1.1.0
+av==12.3.0          # faster-whisper 1.1 needs PyAV < 14
+requests==2.32.3    # used by faster-whisper's model download
+piper-tts==1.3.0    # 1.2.x has no build for Apple Silicon + Python 3.12
+cryptography==43.0.3    # checks RS256 visitor tokens (pyjwt)

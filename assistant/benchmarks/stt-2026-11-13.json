@@ -1,0 +1,1229 @@
+{
+ "date": "2026-11-13",
+ "host": {
+  "cpu_count": 80,
+  "machine": "x86_64",
+  "python": "3.12.16"
+ },
+ "settings": {
+  "device": "cpu",
+  "compute_type": "int8",
+  "beam_size": 1,
+  "vad_filter": true
+ },
+ "audio": "synthetic (Piper); a lower bound for real speech",
+ "results": {
+  "base": {
+   "load_s": 0.9,
+   "groups": {
+    "english": {
+     "n": 20,
+     "wer": 0.062,
+     "language_correct": 20,
+     "latency_p50_s": 0.907,
+     "latency_p95_s": 0.976,
+     "real_time_factor": 0.377,
+     "cpu_cores_used": 5.7
+    },
+    "english_noise_10db": {
+     "n": 10,
+     "wer": 0.063,
+     "language_correct": 10,
+     "latency_p50_s": 0.923,
+     "latency_p95_s": 1.257,
+     "real_time_factor": 0.389,
+     "cpu_cores_used": 5.6
+    },
+    "hindi_auto": {
+     "n": 8,
+     "wer": 1.106,
+     "language_correct": 8,
+     "latency_p50_s": 1.883,
+     "latency_p95_s": 3.316,
+     "real_time_factor": 0.863,
+     "cpu_cores_used": 4.4
+    },
+    "hindi_chosen": {
+     "n": 8,
+     "wer": 1.073,
+     "language_correct": 8,
+     "latency_p50_s": 0.448,
+     "latency_p95_s": 1.962,
+     "real_time_factor": 0.379,
+     "cpu_cores_used": 5.3
+    },
+    "hinglish_auto": {
+     "n": 4,
+     "wer": 0.784,
+     "language_correct": 0,
+     "latency_p50_s": 0.906,
+     "latency_p95_s": 0.945,
+     "real_time_factor": 0.389,
+     "cpu_cores_used": 5.7
+    }
+   },
+   "silence_3s": {
+    "text": "",
+    "empty": true
+   },
+   "rows": [
+    {
+     "group": "english",
+     "ref": "What is the fee for B.Tech Computer Science and Engineering?",
+     "hyp": "What is the fee for B.Tech Computer Science and Engineering?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 3.44,
+     "latency_s": 0.801,
+     "cpu_s": 5.495
+    },
+    {
+     "group": "english",
+     "ref": "Is there a hostel at the technology campus?",
+     "hyp": "Is there a hostel at the Technology Campus?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 2.29,
+     "latency_s": 0.841,
+     "cpu_s": 4.911
+    },
+    {
+     "group": "english",
+     "ref": "What is the COMEDK code for the university?",
+     "hyp": "What is the COMEDK code for the university?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 2.22,
+     "latency_s": 0.883,
+     "cpu_s": 4.932
+    },
+    {
+     "group": "english",
+     "ref": "When does the application for the entrance test begin?",
+     "hyp": "When does the application for the entrance test begin?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 3.25,
+     "latency_s": 0.892,
+     "cpu_s": 5.604
+    },
+    {
+     "group": "english",
+     "ref": "How many seats are there in the MBA programme?",
+     "hyp": "How many seats are there in the MBA program?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.111,
+     "audio_s": 2.64,
+     "latency_s": 0.931,
+     "cpu_s": 5.457
+    },
+    {
+     "group": "english",
+     "ref": "Can diploma holders apply for lateral entry?",
+     "hyp": "Can diploma holders apply for lateral entry?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 2.66,
+     "latency_s": 0.935,
+     "cpu_s": 5.45
+    },
+    {
+     "group": "english",
+     "ref": "What is the eligibility for B.Des Fashion Design?",
+     "hyp": "What is the eligibility for B.Tech's fashion design?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.25,
+     "audio_s": 3.31,
+     "latency_s": 0.944,
+     "cpu_s": 5.972
+    },
+    {
+     "group": "english",
+     "ref": "Is there a scholarship for orphan students?",
+     "hyp": "Is there a scholarship for orphan students?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 2.21,
+     "latency_s": 0.89,
+     "cpu_s": 5.006
+    },
+    {
+     "group": "english",
+     "ref": "Can I pay the fees in cash?",
+     "hyp": "Can I pay the fees and cash?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.143,
+     "audio_s": 1.51,
+     "latency_s": 0.875,
+     "cpu_s": 4.546
+    },
+    {
+     "group": "english",
+     "ref": "What is the fee refund policy?",
+     "hyp": "What is the fee refund policy?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 1.81,
+     "latency_s": 0.907,
+     "cpu_s": 4.889
+    },
+    {
+     "group": "english",
+     "ref": "How long is the BPT course?",
+     "hyp": "How long is the BT course?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.167,
+     "audio_s": 1.79,
+     "latency_s": 0.914,
+     "cpu_s": 4.81
+    },
+    {
+     "group": "english",
+     "ref": "What careers can B.Tech Robotics lead to?",
+     "hyp": "What careers can B.Tech Robotics lead to?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 2.98,
+     "latency_s": 0.962,
+     "cpu_s": 5.809
+    },
+    {
+     "group": "english",
+     "ref": "Is there negative marking in the entrance test?",
+     "hyp": "Is there negative marking in the entrance test?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 2.4,
+     "latency_s": 0.845,
+     "cpu_s": 4.897
+    },
+    {
+     "group": "english",
+     "ref": "What is the application fee?",
+     "hyp": "What is the application fee?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 1.76,
+     "latency_s": 0.88,
+     "cpu_s": 4.581
+    },
+    {
+     "group": "english",
+     "ref": "Which entrance exams are accepted for M.Tech?",
+     "hyp": "Which in Trans exams are accepted for M.Tech?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.286,
+     "audio_s": 3.05,
+     "latency_s": 0.976,
+     "cpu_s": 5.796
+    },
+    {
+     "group": "english",
+     "ref": "Where is the main campus?",
+     "hyp": "Where is the main campus?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 1.51,
+     "latency_s": 0.877,
+     "cpu_s": 4.498
+    },
+    {
+     "group": "english",
+     "ref": "Does the university provide education loans?",
+     "hyp": "Does the university provide education loans?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 2.66,
+     "latency_s": 0.913,
+     "cpu_s": 5.354
+    },
+    {
+     "group": "english",
+     "ref": "What is the intake for BDS?",
+     "hyp": "What is the intake for BDS?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 1.96,
+     "latency_s": 0.916,
+     "cpu_s": 4.928
+    },
+    {
+     "group": "english",
+     "ref": "Are original documents required during admission?",
+     "hyp": "Our original documents required during admission.",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.167,
+     "audio_s": 2.58,
+     "latency_s": 0.888,
+     "cpu_s": 5.142
+    },
+    {
+     "group": "english",
+     "ref": "Can I talk to someone from the admissions office?",
+     "hyp": "Can I talk to someone from the Edmissions Office?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.111,
+     "audio_s": 2.8,
+     "latency_s": 1.337,
+     "cpu_s": 6.969
+    },
+    {
+     "group": "english_noise_10db",
+     "ref": "What is the fee for B.Tech Computer Science and Engineering?",
+     "hyp": "What is the fee for B.Tech, Computer Science, and Engineering?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 3.09,
+     "latency_s": 0.889,
+     "cpu_s": 5.471
+    },
+    {
+     "group": "english_noise_10db",
+     "ref": "Is there a hostel at the technology campus?",
+     "hyp": "Is there a hostel at the Technology Campus?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 2.25,
+     "latency_s": 0.937,
+     "cpu_s": 5.104
+    },
+    {
+     "group": "english_noise_10db",
+     "ref": "What is the COMEDK code for the university?",
+     "hyp": "What is the command code for the university?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.125,
+     "audio_s": 2.37,
+     "latency_s": 0.837,
+     "cpu_s": 4.829
+    },
+    {
+     "group": "english_noise_10db",
+     "ref": "When does the application for the entrance test begin?",
+     "hyp": "When does the application for the entrance test begin?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 2.87,
+     "latency_s": 0.923,
+     "cpu_s": 5.485
+    },
+    {
+     "group": "english_noise_10db",
+     "ref": "How many seats are there in the MBA programme?",
+     "hyp": "How many seats are there in the MBA program?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.111,
+     "audio_s": 2.32,
+     "latency_s": 0.856,
+     "cpu_s": 4.944
+    },
+    {
+     "group": "english_noise_10db",
+     "ref": "Can diploma holders apply for lateral entry?",
+     "hyp": "Can diploma holders apply for lateral entry?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 2.68,
+     "latency_s": 0.962,
+     "cpu_s": 5.536
+    },
+    {
+     "group": "english_noise_10db",
+     "ref": "What is the eligibility for B.Des Fashion Design?",
+     "hyp": "What is the eligibility for B.Tech's fashion design?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.25,
+     "audio_s": 3.1,
+     "latency_s": 0.96,
+     "cpu_s": 5.842
+    },
+    {
+     "group": "english_noise_10db",
+     "ref": "Is there a scholarship for orphan students?",
+     "hyp": "Is there a scholarship for students?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.143,
+     "audio_s": 2.11,
+     "latency_s": 1.257,
+     "cpu_s": 6.071
+    },
+    {
+     "group": "english_noise_10db",
+     "ref": "Can I pay the fees in cash?",
+     "hyp": "Can I pay the fees in cash?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 1.56,
+     "latency_s": 0.871,
+     "cpu_s": 4.482
+    },
+    {
+     "group": "english_noise_10db",
+     "ref": "What is the fee refund policy?",
+     "hyp": "What is the fee refund policy?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 1.83,
+     "latency_s": 0.902,
+     "cpu_s": 4.843
+    },
+    {
+     "group": "hinglish_auto",
+     "ref": "B.Tech CSE ki fees kitni hai?",
+     "hyp": "B.Tech, CSE, K.K.K.K.K.K.N.H.",
+     "lang_expected": "hi",
+     "lang_detected": "en",
+     "wer": 0.667,
+     "audio_s": 2.64,
+     "latency_s": 0.945,
+     "cpu_s": 5.5
+    },
+    {
+     "group": "hinglish_auto",
+     "ref": "Hostel ka kharcha kitna hai?",
+     "hyp": "hostel, clock, card, ticket, NAHI.",
+     "lang_expected": "hi",
+     "lang_detected": "en",
+     "wer": 0.8,
+     "audio_s": 1.85,
+     "latency_s": 0.883,
+     "cpu_s": 4.758
+    },
+    {
+     "group": "hinglish_auto",
+     "ref": "MBA ke liye kaunsa exam chahiye?",
+     "hyp": "بيكي لأي كونسجم شهي.",
+     "lang_expected": "hi",
+     "lang_detected": "ar",
+     "wer": 1.0,
+     "audio_s": 2.68,
+     "latency_s": 0.906,
+     "cpu_s": 5.356
+    },
+    {
+     "group": "hinglish_auto",
+     "ref": "Scholarship milegi kya?",
+     "hyp": "Scholarship, Mile, G.Kaya?",
+     "lang_expected": "hi",
+     "lang_detected": "en",
+     "wer": 0.667,
+     "audio_s": 2.18,
+     "latency_s": 0.906,
+     "cpu_s": 5.021
+    },
+    {
+     "group": "hindi_auto",
+     "ref": "बी टेक की फीस कितनी है?",
+     "hyp": "B.Tech, Keefees, KITNIEH",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 1.0,
+     "audio_s": 2.05,
+     "latency_s": 2.285,
+     "cpu_s": 9.566
+    },
+    {
+     "group": "hindi_auto",
+     "ref": "क्या हॉस्टल की सुविधा है?",
+     "hyp": "Kia hostel ki Subedha hai.",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 1.0,
+     "audio_s": 1.9,
+     "latency_s": 2.55,
+     "cpu_s": 9.459
+    },
+    {
+     "group": "hindi_auto",
+     "ref": "आवेदन शुल्क कितना है?",
+     "hyp": "A.V.D.N.SHUK KITNAYE",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 1.0,
+     "audio_s": 2.17,
+     "latency_s": 0.929,
+     "cpu_s": 5.115
+    },
+    {
+     "group": "hindi_auto",
+     "ref": "प्रवेश परीक्षा कब होती है?",
+     "hyp": "Pradesh Padiksa, K.B.H.H.",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 1.0,
+     "audio_s": 2.29,
+     "latency_s": 0.944,
+     "cpu_s": 5.218
+    },
+    {
+     "group": "hindi_auto",
+     "ref": "क्या छात्रवृत्ति मिलती है?",
+     "hyp": "KIA CHATRU VRITTI MILTI HAY",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 1.25,
+     "audio_s": 2.0,
+     "latency_s": 3.316,
+     "cpu_s": 13.393
+    },
+    {
+     "group": "hindi_auto",
+     "ref": "एमबीए में कितनी सीटें हैं?",
+     "hyp": "Admissions enquiry. B.Tech, M.Tech, MBA, CSE, lakh, crore,",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 1.6,
+     "audio_s": 2.3,
+     "latency_s": 1.883,
+     "cpu_s": 8.382
+    },
+    {
+     "group": "hindi_auto",
+     "ref": "क्या मैं किस्तों में फीस दे सकता हूँ?",
+     "hyp": "KCET, M.Tech, Stome, FIS, DE SAKTAN.",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 1.0,
+     "audio_s": 2.45,
+     "latency_s": 1.501,
+     "cpu_s": 7.109
+    },
+    {
+     "group": "hindi_auto",
+     "ref": "कॉलेज कहाँ है?",
+     "hyp": "College, K.H.",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 1.0,
+     "audio_s": 1.2,
+     "latency_s": 0.707,
+     "cpu_s": 3.638
+    },
+    {
+     "group": "hindi_chosen",
+     "ref": "बी टेक की फीस कितनी है?",
+     "hyp": "bhi te ki fis kitni hai",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 1.0,
+     "audio_s": 2.05,
+     "latency_s": 0.411,
+     "cpu_s": 3.027
+    },
+    {
+     "group": "hindi_chosen",
+     "ref": "क्या हॉस्टल की सुविधा है?",
+     "hyp": "کیا хوستل کی سوویدھا ہے",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 1.0,
+     "audio_s": 1.9,
+     "latency_s": 0.421,
+     "cpu_s": 2.901
+    },
+    {
+     "group": "hindi_chosen",
+     "ref": "आवेदन शुल्क कितना है?",
+     "hyp": "आवेदन अविदन अविदन अविदन अविदन",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 1.0,
+     "audio_s": 2.17,
+     "latency_s": 0.514,
+     "cpu_s": 3.455
+    },
+    {
+     "group": "hindi_chosen",
+     "ref": "प्रवेश परीक्षा कब होती है?",
+     "hyp": "پرہویش پڑیکشا قب ہوتی ہے",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 1.0,
+     "audio_s": 2.29,
+     "latency_s": 0.429,
+     "cpu_s": 3.274
+    },
+    {
+     "group": "hindi_chosen",
+     "ref": "क्या छात्रवृत्ति मिलती है?",
+     "hyp": "کیا چhaattra vrkthi milthi hai?",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 1.25,
+     "audio_s": 2.0,
+     "latency_s": 0.444,
+     "cpu_s": 3.069
+    },
+    {
+     "group": "hindi_chosen",
+     "ref": "एमबीए में कितनी सीटें हैं?",
+     "hyp": "& beade make, kitnee seati hai.",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 1.0,
+     "audio_s": 2.3,
+     "latency_s": 1.962,
+     "cpu_s": 7.824
+    },
+    {
+     "group": "hindi_chosen",
+     "ref": "क्या मैं किस्तों में फीस दे सकता हूँ?",
+     "hyp": "کیا میں کس تو میں فیس دی سکتا",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 1.0,
+     "audio_s": 2.45,
+     "latency_s": 0.448,
+     "cpu_s": 3.425
+    },
+    {
+     "group": "hindi_chosen",
+     "ref": "कॉलेज कहाँ है?",
+     "hyp": "College, where is it?",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 1.333,
+     "audio_s": 1.2,
+     "latency_s": 1.577,
+     "cpu_s": 5.714
+    }
+   ]
+  },
+  "small": {
+   "load_s": 1.0,
+   "groups": {
+    "english": {
+     "n": 20,
+     "wer": 0.026,
+     "language_correct": 20,
+     "latency_p50_s": 2.323,
+     "latency_p95_s": 2.399,
+     "real_time_factor": 0.946,
+     "cpu_cores_used": 4.5
+    },
+    "english_noise_10db": {
+     "n": 10,
+     "wer": 0.038,
+     "language_correct": 10,
+     "latency_p50_s": 2.293,
+     "latency_p95_s": 2.358,
+     "real_time_factor": 0.953,
+     "cpu_cores_used": 4.5
+    },
+    "hindi_auto": {
+     "n": 8,
+     "wer": 0.614,
+     "language_correct": 8,
+     "latency_p50_s": 2.469,
+     "latency_p95_s": 2.669,
+     "real_time_factor": 1.212,
+     "cpu_cores_used": 4.3
+    },
+    "hindi_chosen": {
+     "n": 8,
+     "wer": 0.452,
+     "language_correct": 8,
+     "latency_p50_s": 1.391,
+     "latency_p95_s": 1.489,
+     "real_time_factor": 0.673,
+     "cpu_cores_used": 4.8
+    },
+    "hinglish_auto": {
+     "n": 4,
+     "wer": 1.408,
+     "language_correct": 0,
+     "latency_p50_s": 2.412,
+     "latency_p95_s": 2.867,
+     "real_time_factor": 1.067,
+     "cpu_cores_used": 4.4
+    }
+   },
+   "silence_3s": {
+    "text": "",
+    "empty": true
+   },
+   "rows": [
+    {
+     "group": "english",
+     "ref": "What is the fee for B.Tech Computer Science and Engineering?",
+     "hyp": "What is the fee for B.Tech computer science and engineering?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 3.44,
+     "latency_s": 2.349,
+     "cpu_s": 11.166
+    },
+    {
+     "group": "english",
+     "ref": "Is there a hostel at the technology campus?",
+     "hyp": "Is there a hostel at the technology campus?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 2.29,
+     "latency_s": 2.334,
+     "cpu_s": 10.274
+    },
+    {
+     "group": "english",
+     "ref": "What is the COMEDK code for the university?",
+     "hyp": "What is the COMED code for the university?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.125,
+     "audio_s": 2.22,
+     "latency_s": 2.399,
+     "cpu_s": 10.376
+    },
+    {
+     "group": "english",
+     "ref": "When does the application for the entrance test begin?",
+     "hyp": "When does the application for the entrance test begin?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 3.25,
+     "latency_s": 2.347,
+     "cpu_s": 10.885
+    },
+    {
+     "group": "english",
+     "ref": "How many seats are there in the MBA programme?",
+     "hyp": "How many seats are there in the MBA program?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.111,
+     "audio_s": 2.64,
+     "latency_s": 2.347,
+     "cpu_s": 10.596
+    },
+    {
+     "group": "english",
+     "ref": "Can diploma holders apply for lateral entry?",
+     "hyp": "Can diploma holders apply for lateral entry?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 2.66,
+     "latency_s": 2.3,
+     "cpu_s": 10.449
+    },
+    {
+     "group": "english",
+     "ref": "What is the eligibility for B.Des Fashion Design?",
+     "hyp": "What is the eligibility for B.DES fashion design?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 3.31,
+     "latency_s": 2.407,
+     "cpu_s": 11.237
+    },
+    {
+     "group": "english",
+     "ref": "Is there a scholarship for orphan students?",
+     "hyp": "Is there a scholarship for orphan students?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 2.21,
+     "latency_s": 2.259,
+     "cpu_s": 9.955
+    },
+    {
+     "group": "english",
+     "ref": "Can I pay the fees in cash?",
+     "hyp": "Can I pay the fees in cash?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 1.51,
+     "latency_s": 2.226,
+     "cpu_s": 9.444
+    },
+    {
+     "group": "english",
+     "ref": "What is the fee refund policy?",
+     "hyp": "What is the fee refund policy?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 1.81,
+     "latency_s": 2.292,
+     "cpu_s": 9.88
+    },
+    {
+     "group": "english",
+     "ref": "How long is the BPT course?",
+     "hyp": "How long is the B.P.T. course?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 1.79,
+     "latency_s": 2.357,
+     "cpu_s": 10.007
+    },
+    {
+     "group": "english",
+     "ref": "What careers can B.Tech Robotics lead to?",
+     "hyp": "What careers can be.Tech Robotics lead to.",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.286,
+     "audio_s": 2.98,
+     "latency_s": 2.345,
+     "cpu_s": 10.787
+    },
+    {
+     "group": "english",
+     "ref": "Is there negative marking in the entrance test?",
+     "hyp": "Is there negative marking in the entrance test?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 2.4,
+     "latency_s": 2.323,
+     "cpu_s": 10.26
+    },
+    {
+     "group": "english",
+     "ref": "What is the application fee?",
+     "hyp": "What is the application fee?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 1.76,
+     "latency_s": 2.24,
+     "cpu_s": 9.575
+    },
+    {
+     "group": "english",
+     "ref": "Which entrance exams are accepted for M.Tech?",
+     "hyp": "Which entrance exams are accepted for M.Tech.",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 3.05,
+     "latency_s": 2.304,
+     "cpu_s": 10.668
+    },
+    {
+     "group": "english",
+     "ref": "Where is the main campus?",
+     "hyp": "Where is the main campus?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 1.51,
+     "latency_s": 2.243,
+     "cpu_s": 9.497
+    },
+    {
+     "group": "english",
+     "ref": "Does the university provide education loans?",
+     "hyp": "Does the university provide education loans?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 2.66,
+     "latency_s": 2.283,
+     "cpu_s": 10.369
+    },
+    {
+     "group": "english",
+     "ref": "What is the intake for BDS?",
+     "hyp": "What is the intake for BDS?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 1.96,
+     "latency_s": 2.261,
+     "cpu_s": 9.919
+    },
+    {
+     "group": "english",
+     "ref": "Are original documents required during admission?",
+     "hyp": "Are original documents required during admission?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 2.58,
+     "latency_s": 2.249,
+     "cpu_s": 10.153
+    },
+    {
+     "group": "english",
+     "ref": "Can I talk to someone from the admissions office?",
+     "hyp": "Can I talk to someone from the admissions office?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 2.8,
+     "latency_s": 2.329,
+     "cpu_s": 10.613
+    },
+    {
+     "group": "english_noise_10db",
+     "ref": "What is the fee for B.Tech Computer Science and Engineering?",
+     "hyp": "What is the fee for B.Tech, Computer Science and Engineering?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 3.09,
+     "latency_s": 2.358,
+     "cpu_s": 10.884
+    },
+    {
+     "group": "english_noise_10db",
+     "ref": "Is there a hostel at the technology campus?",
+     "hyp": "Is there a hostel at the Technology Campus?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 2.25,
+     "latency_s": 2.288,
+     "cpu_s": 10.112
+    },
+    {
+     "group": "english_noise_10db",
+     "ref": "What is the COMEDK code for the university?",
+     "hyp": "What is the COMED code for the university?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.125,
+     "audio_s": 2.37,
+     "latency_s": 2.342,
+     "cpu_s": 10.364
+    },
+    {
+     "group": "english_noise_10db",
+     "ref": "When does the application for the entrance test begin?",
+     "hyp": "When does the application for the entrance test begin?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 2.87,
+     "latency_s": 2.293,
+     "cpu_s": 10.545
+    },
+    {
+     "group": "english_noise_10db",
+     "ref": "How many seats are there in the MBA programme?",
+     "hyp": "How many seats are there in the MBA program?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.111,
+     "audio_s": 2.32,
+     "latency_s": 2.293,
+     "cpu_s": 10.219
+    },
+    {
+     "group": "english_noise_10db",
+     "ref": "Can diploma holders apply for lateral entry?",
+     "hyp": "Can diploma holders apply for lateral entry?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 2.68,
+     "latency_s": 2.358,
+     "cpu_s": 10.555
+    },
+    {
+     "group": "english_noise_10db",
+     "ref": "What is the eligibility for B.Des Fashion Design?",
+     "hyp": "What is the eligibility for B.Des fashion design?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 3.1,
+     "latency_s": 2.309,
+     "cpu_s": 10.802
+    },
+    {
+     "group": "english_noise_10db",
+     "ref": "Is there a scholarship for orphan students?",
+     "hyp": "Is there a scholarship for orphaned students?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.143,
+     "audio_s": 2.11,
+     "latency_s": 2.281,
+     "cpu_s": 10.061
+    },
+    {
+     "group": "english_noise_10db",
+     "ref": "Can I pay the fees in cash?",
+     "hyp": "Can I pay the fees in cash?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 1.56,
+     "latency_s": 2.251,
+     "cpu_s": 9.512
+    },
+    {
+     "group": "english_noise_10db",
+     "ref": "What is the fee refund policy?",
+     "hyp": "What is the fee refund policy?",
+     "lang_expected": "en",
+     "lang_detected": "en",
+     "wer": 0.0,
+     "audio_s": 1.83,
+     "latency_s": 2.271,
+     "cpu_s": 9.781
+    },
+    {
+     "group": "hinglish_auto",
+     "ref": "B.Tech CSE ki fees kitni hai?",
+     "hyp": "B.Tech, CSE, Khayfiz, KITNI, Hai.",
+     "lang_expected": "hi",
+     "lang_detected": "en",
+     "wer": 0.333,
+     "audio_s": 2.64,
+     "latency_s": 2.412,
+     "cpu_s": 10.869
+    },
+    {
+     "group": "hinglish_auto",
+     "ref": "Hostel ka kharcha kitna hai?",
+     "hyp": "hostel, KCET, NAHI.",
+     "lang_expected": "hi",
+     "lang_detected": "en",
+     "wer": 0.8,
+     "audio_s": 1.85,
+     "latency_s": 2.398,
+     "cpu_s": 10.254
+    },
+    {
+     "group": "hinglish_auto",
+     "ref": "MBA ke liye kaunsa exam chahiye?",
+     "hyp": "MBA, KCET, M.Tech, MBA, CSE, lakh, crore, rupees, hostel, scholarship, counselling, KCET, M.Tech, MBA, CSE, lakh, crore, rupees, hostel, scholarship, counselling, KCET, M.Tech, MBA,",
+     "lang_expected": "hi",
+     "lang_detected": "en",
+     "wer": 3.833,
+     "audio_s": 2.68,
+     "latency_s": 2.867,
+     "cpu_s": 12.655
+    },
+    {
+     "group": "hinglish_auto",
+     "ref": "Scholarship milegi kya?",
+     "hyp": "Scholarship, Myelji Kaya.",
+     "lang_expected": "hi",
+     "lang_detected": "en",
+     "wer": 0.667,
+     "audio_s": 2.18,
+     "latency_s": 2.296,
+     "cpu_s": 10.098
+    },
+    {
+     "group": "hindi_auto",
+     "ref": "बी टेक की फीस कितनी है?",
+     "hyp": "B.Tech, M.Tech, MBA, CSE, lakh, crore, rupees,",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 1.167,
+     "audio_s": 2.05,
+     "latency_s": 2.403,
+     "cpu_s": 10.409
+    },
+    {
+     "group": "hindi_auto",
+     "ref": "क्या हॉस्टल की सुविधा है?",
+     "hyp": "क्या, hostel की सुविद्षा है?",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 0.4,
+     "audio_s": 1.9,
+     "latency_s": 2.416,
+     "cpu_s": 10.322
+    },
+    {
+     "group": "hindi_auto",
+     "ref": "आवेदन शुल्क कितना है?",
+     "hyp": "अवेदन शुवक कितना है.",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 0.5,
+     "audio_s": 2.17,
+     "latency_s": 2.447,
+     "cpu_s": 10.702
+    },
+    {
+     "group": "hindi_auto",
+     "ref": "प्रवेश परीक्षा कब होती है?",
+     "hyp": "प्रवेश पदिखशा कब होती है?",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 0.2,
+     "audio_s": 2.29,
+     "latency_s": 2.669,
+     "cpu_s": 11.516
+    },
+    {
+     "group": "hindi_auto",
+     "ref": "क्या छात्रवृत्ति मिलती है?",
+     "hyp": "Kya chhatra vritti milti hai?",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 1.25,
+     "audio_s": 2.0,
+     "latency_s": 2.469,
+     "cpu_s": 10.532
+    },
+    {
+     "group": "hindi_auto",
+     "ref": "एमबीए में कितनी सीटें हैं?",
+     "hyp": "MBA में कितनी CET यहें.",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 0.6,
+     "audio_s": 2.3,
+     "latency_s": 2.502,
+     "cpu_s": 10.914
+    },
+    {
+     "group": "hindi_auto",
+     "ref": "क्या मैं किस्तों में फीस दे सकता हूँ?",
+     "hyp": "क्या मैं किस्तो में फीस दे सकता हूँ?",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 0.125,
+     "audio_s": 2.45,
+     "latency_s": 2.636,
+     "cpu_s": 11.493
+    },
+    {
+     "group": "hindi_auto",
+     "ref": "कॉलेज कहाँ है?",
+     "hyp": "KOLLEGE कहा है?",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 0.667,
+     "audio_s": 1.2,
+     "latency_s": 2.29,
+     "cpu_s": 9.412
+    },
+    {
+     "group": "hindi_chosen",
+     "ref": "बी टेक की फीस कितनी है?",
+     "hyp": "भी ते की फीज कितनी है",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 0.5,
+     "audio_s": 2.05,
+     "latency_s": 1.323,
+     "cpu_s": 6.426
+    },
+    {
+     "group": "hindi_chosen",
+     "ref": "क्या हॉस्टल की सुविधा है?",
+     "hyp": "क्या होस्तल की सुविद्धा है?",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 0.4,
+     "audio_s": 1.9,
+     "latency_s": 1.391,
+     "cpu_s": 6.578
+    },
+    {
+     "group": "hindi_chosen",
+     "ref": "आवेदन शुल्क कितना है?",
+     "hyp": "अवेदन शुब् कितना है",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 0.5,
+     "audio_s": 2.17,
+     "latency_s": 1.352,
+     "cpu_s": 6.626
+    },
+    {
+     "group": "hindi_chosen",
+     "ref": "प्रवेश परीक्षा कब होती है?",
+     "hyp": "प्रवेश पदिख्शा कब होती है?",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 0.2,
+     "audio_s": 2.29,
+     "latency_s": 1.489,
+     "cpu_s": 7.242
+    },
+    {
+     "group": "hindi_chosen",
+     "ref": "क्या छात्रवृत्ति मिलती है?",
+     "hyp": "क्या चात्र व्र्त्ती मिलती है?",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 0.5,
+     "audio_s": 2.0,
+     "latency_s": 1.39,
+     "cpu_s": 6.673
+    },
+    {
+     "group": "hindi_chosen",
+     "ref": "एमबीए में कितनी सीटें हैं?",
+     "hyp": "आँई बीडे में कितनी सीटे हैं",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 0.6,
+     "audio_s": 2.3,
+     "latency_s": 1.413,
+     "cpu_s": 6.967
+    },
+    {
+     "group": "hindi_chosen",
+     "ref": "क्या मैं किस्तों में फीस दे सकता हूँ?",
+     "hyp": "क्या मैं किस्तो में फीज दे सकता हूँ?",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 0.25,
+     "audio_s": 2.45,
+     "latency_s": 1.429,
+     "cpu_s": 7.124
+    },
+    {
+     "group": "hindi_chosen",
+     "ref": "कॉलेज कहाँ है?",
+     "hyp": "कोलिज कहा है?",
+     "lang_expected": "hi",
+     "lang_detected": "hi",
+     "wer": 0.667,
+     "audio_s": 1.2,
+     "latency_s": 1.217,
+     "cpu_s": 5.465
+    }
+   ]
+  }
+ }
+}

@@ -1,0 +1,69 @@
+# LiteLLM proxy for Level 1 (PRD 9.5, 14): one OpenAI-compatible endpoint in front of the shared
+# Ollama service. Proposed for deploy/ (the guide owns deployment); Module B only needs its URL.
+#
+#   litellm --config assistant/gateway/litellm.config.yaml --host 127.0.0.1 --port 8300
+#
+# Module B then uses (see assistant/README.md, "Model gateway"):
+#   LLM_BASE_URL=http://127.0.0.1:8300/v1      LLM_API_KEY=<LITELLM_MASTER_KEY or a virtual key>
+#   MODEL_ALIASES=local/qwen2.5-14b-instruct=local/qwen2.5-14b-instruct,local/llama3.1-8b=local/llama3.1-8b
+#   ANSWER_MODEL=local/qwen2.5-14b-instruct  FALLBACK_MODEL=local/llama3.1-8b  ROUTER_MODEL=local/llama3.1-8b
+#
+# Level 1 rules kept here:
+# - Only local models: every entry is an Ollama model on the lab network. No provider keys exist
+#   in this file or its environment, so nothing can be sent outside the lab (PRD 9.5, 16).
+# - No retries or fallbacks inside LiteLLM: Module B does the one retry the PRD allows (primary,
+#   then the 8B model) itself, inside its latency budget (7.5). Two layers retrying would double
+#   the wait before the visitor is offered a callback.
+# - Timeouts match Module B's: 20 s per answer (PRD F1 "gateway timeout > 20 s").
+
+model_list:
+  # Answers (PRD 9.5: Qwen2.5-14B-Instruct Q4 on GPU 0)
+  - model_name: local/qwen2.5-14b-instruct
+    litellm_params:
+      model: ollama_chat/qwen2.5:14b-instruct
+      api_base: os.environ/OLLAMA_API_BASE        # e.g. http://127.0.0.1:11434
+      timeout: 20
+      stream_timeout: 20
+  # Routing, voice answers and the fallback (PRD 9.5: Llama-3.1-8B-Instruct Q4 on GPU 1)
+  - model_name: local/llama3.1-8b
+    litellm_params:
+      model: ollama_chat/llama3.1:8b
+      api_base: os.environ/OLLAMA_API_BASE
+      timeout: 20
+      stream_timeout: 20
+  # Laptop and CI stand-in (the prototype's measurements were made with it)
+  - model_name: local/qwen2.5-3b
+    litellm_params:
+      model: ollama_chat/qwen2.5:3b
+      api_base: os.environ/OLLAMA_API_BASE
+      timeout: 20
+      stream_timeout: 20
+  # Offline comparison and grading only (PRD 20), never on the hot path; Server 2, scheduled window.
+  # Check both tags with `ollama list` on the shared service before use: Ollama has re-pointed
+  # deepseek-r1 tags to newer distills over time, and the PRD names the Qwen-14B and Llama-8B ones.
+  - model_name: local/deepseek-r1-distill-qwen-14b
+    litellm_params:
+      model: ollama_chat/deepseek-r1:14b
+      api_base: os.environ/OLLAMA_API_BASE
+      timeout: 120
+  - model_name: local/deepseek-r1-distill-llama-8b
+    litellm_params:
+      model: ollama_chat/deepseek-r1:8b
+      api_base: os.environ/OLLAMA_API_BASE
+      timeout: 120
+
+litellm_settings:
+  num_retries: 0
+  request_timeout: 20
+  drop_params: true
+  # Traces go to the lab's own Langfuse when it is set up (PRD 14); nothing is sent elsewhere.
+  # success_callback: ["langfuse"]
+  # failure_callback: ["langfuse"]
+
+router_settings:
+  num_retries: 0
+  allowed_fails: 3
+  cooldown_time: 30
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
