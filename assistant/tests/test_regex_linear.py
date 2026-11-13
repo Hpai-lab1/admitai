@@ -69,7 +69,8 @@ def test_the_new_patterns_find_exactly_what_the_old_ones_found():
 
 def test_addresses_written_together_are_all_masked():
     # Found by the comparison above: a lookbehind version left the second address visible.
-    s = "mail ishow@b.ismailmail.commailkya+@xx_y.com now"
+    # Reserved test domains (RFC 2606), as the repository's guide-gate asks for test addresses.
+    s = "mail a.b@one.test+c@two.test now"
     assert guard.mask_pii(s) == "mail [email][email] now"
 
 
