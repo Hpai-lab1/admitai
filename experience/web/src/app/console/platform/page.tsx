@@ -136,7 +136,7 @@ export default function Platform() {
                 <Badge tone={STATUS_TONE[c.status]}>{c.status}</Badge>
                 {c.status === "onboarding" && (
                   <span className="ml-auto flex gap-2">
-                    <button className="btn-secondary px-3 text-xs" onClick={() => void check(c.id)}>
+                    <button className="btn-quiet px-3 text-xs" onClick={() => void check(c.id)}>
                       Readiness
                     </button>
                     <button

@@ -16,12 +16,19 @@ import zipfile
 from uuid import UUID, uuid4
 
 import httpx
+import psycopg
 import yaml
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from psycopg.rows import dict_row
 
 from ..config import Settings, token_keys
 from ..db import Context, Jsonb, audit, tx
-from ..deps import require_staff, settings_dep
+from ..deps import (
+    DEPARTMENT_ROLES,
+    STAFF_ROLES as ALL_ROLES,
+    require_staff,
+    settings_dep,
+)
 from ..schemas import TenantConfig
 from ..security import hash_password
 from .admin import temporary_password
@@ -32,7 +39,7 @@ PACK_TIMEOUT = httpx.Timeout(
     900.0
 )  # embedding a large prospectus takes minutes on a laptop
 MAX_PACK_BYTES = 200 * 1024 * 1024
-STAFF_ROLES = {"college_admin", "admission_officer", "faculty", "marketing_manager"}
+STAFF_ROLES = set(ALL_ROLES) - {"super_admin"}  # roles a Tenant Pack may give
 
 
 def _pack_yaml(data: bytes) -> dict:
@@ -62,6 +69,7 @@ def _c_config(pack: dict) -> dict:
         "office_hours": pack.get("office_hours"),
         "response_time_hours": pack.get("response_time_hours"),
         "privacy_notice_url": pack.get("privacy_notice_url"),
+        "translations": pack.get("translations"),
     }
     cfg = TenantConfig(**{k: v for k, v in raw.items() if v is not None}).model_dump()
     cfg["launch"] = pack.get("launch") or {}
@@ -80,8 +88,8 @@ def _staff_problems(pack: dict) -> list[str]:
         unknown = [d for d in s.get("departments") or [] if d not in depts]
         if unknown:
             problems.append(f"staff #{i}: unknown department(s) {', '.join(unknown)}")
-        if s.get("role") == "faculty" and not s.get("departments"):
-            problems.append(f"staff #{i}: faculty need at least one department")
+        if s.get("role") in DEPARTMENT_ROLES and not s.get("departments"):
+            problems.append(f"staff #{i}: {s['role']} needs at least one department")
     return problems
 
 
@@ -96,7 +104,8 @@ def _staff_readiness(cur, departments: list[str]) -> list[dict]:
     officers = sum(
         1 for s in staff if s["role"] in ("admission_officer", "college_admin")
     )
-    covered = {d for s in staff if s["role"] == "faculty" for d in s["depts"]}
+    # A finance officer or hostel warden covers their department as faculty would.
+    covered = {d for s in staff if s["role"] in DEPARTMENT_ROLES for d in s["depts"]}
     missing = [d for d in departments if d not in covered]
     return [
         {
@@ -365,7 +374,8 @@ def launch(
     run_id = r.json()["id"]
     with tx(settings.database_url, _ctx(ctx, tenant)) as cur:
         cur.execute(
-            "update app.tenants set config = config || %s where id = %s",
+            # A new launch starts clean: an earlier failed run must not stop it going live.
+            "update app.tenants set config = (config - 'launch_failed_run') || %s where id = %s",
             (Jsonb({"launch_run": run_id}), tenant),
         )
         audit(
@@ -377,6 +387,62 @@ def launch(
             after={"run": run_id},
         )
     return {"status": "testing", "run_id": run_id}
+
+
+def _launch_result(settings: Settings, tenant: UUID, cfg: dict) -> dict:
+    launch_cfg = cfg.get("launch") or {}
+    params = {
+        k: launch_cfg[k] for k in ("min_accuracy", "min_refusal") if k in launch_cfg
+    }
+    return _a(
+        settings,
+        "GET",
+        f"/tenant-pack/launch/{cfg['launch_run']}",
+        tenant,
+        params=params,
+    ).json()
+
+
+def finish_launches(settings: Settings) -> list[str]:
+    """Called by the messaging worker: a college whose launch test passed goes live even if nobody
+    keeps the Colleges page open. A failed run is remembered so it is not asked about again."""
+    with psycopg.connect(settings.worker_database_url, row_factory=dict_row) as conn:
+        rows = conn.execute(
+            "select id, slug, config from app.tenants where status = 'onboarding'"
+            " and config->>'launch_run' is not null"
+            " and config->>'launch_run' is distinct from config->>'launch_failed_run'"
+        ).fetchall()
+    live = []
+    for t in rows:
+        try:
+            result = _launch_result(settings, t["id"], t["config"])
+        except (HTTPException, ValueError):
+            continue  # Module A is down or answered badly: try again on the next run
+        if result.get("status") != "done":
+            continue
+        with psycopg.connect(settings.worker_database_url) as conn:
+            if not result.get("passed"):
+                conn.execute(
+                    "update app.tenants set config = config || %s where id = %s",
+                    (Jsonb({"launch_failed_run": t["config"]["launch_run"]}), t["id"]),
+                )
+                continue
+            went_live = conn.execute(
+                "update app.tenants set status = 'live' where id = %s and status = 'onboarding'",
+                (t["id"],),
+            ).rowcount
+            if went_live:
+                with conn.cursor() as cur:
+                    audit(
+                        cur,
+                        Context(t["id"], "service"),
+                        "tenant.live",
+                        "tenant",
+                        t["id"],
+                        after={"scores": result.get("scores")},
+                    )
+                live.append(t["slug"])
+    return live
 
 
 @router.get(
@@ -395,18 +461,7 @@ def launch_status(
         return {"status": "live"}
     if not cfg.get("launch_run"):
         return {"status": t["status"], "detail": "No launch test has been run"}
-    launch_cfg = cfg.get("launch") or {}
-    params = {
-        k: launch_cfg[k] for k in ("min_accuracy", "min_refusal") if k in launch_cfg
-    }
-    r = _a(
-        settings,
-        "GET",
-        f"/tenant-pack/launch/{cfg['launch_run']}",
-        tenant,
-        params=params,
-    )
-    result = r.json()
+    result = _launch_result(settings, tenant, cfg)
     if result.get("status") != "done":
         return {"status": "testing"}
     if result["passed"]:

@@ -9,9 +9,26 @@ from __future__ import annotations
 
 import re
 
-_EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+# The local part is bounded (as in Module B): unbounded, 50,000 letters without an "@" took 9 s.
+_EMAIL = re.compile(r"[\w.+-]{1,64}@[\w-]+\.[\w.-]+")
 _PHONE = re.compile(r"(?<!\d)(?:\+?91[\s-]?)?[6-9]\d{4}[\s-]?\d{5}(?!\d)")
 _AADHAAR = re.compile(r"(?<!\d)\d{4}\s?\d{4}\s?\d{4}(?!\d)")
+# Secrets a visitor may type: the digits after OTP / PIN / password / verification code, and the
+# word after "password is". Seen live (18 Nov 2026): "My OTP is 482913" reached the analytics page.
+# The bare word "code" is left alone, so college codes ("COMEDK code E197") are not touched.
+_SECRET_CODE = re.compile(
+    r"\b(otp|one[- ]time (?:password|code)|pin|passcode|password|verification code|security code)"
+    r"(\W{1,3}(?:is\W{1,2}|was\W{1,2})?)(\d{4,8})\b",
+    re.IGNORECASE,
+)
+_PASSWORD = re.compile(
+    r"\b(password|passcode)(\s+(?:is|was)\s+|\s*[:=]\s*)(\S{1,64})", re.IGNORECASE
+)
+# Another person's records: "the marks of Rahul", "results for Priya Sharma" (a capitalised name).
+_RECORD_OF = re.compile(
+    r"\b((?:marks|results?|grades?|scores?|attendance|records?|report card|details)\s+(?:of|for)\s+)"
+    r"([A-Z][a-z]{1,20}(?:\s[A-Z][a-z]{1,20}){0,2})\b"
+)
 # "my name is Priya Sharma", "I am Rahul", "this is Anil" (capitalised words after an introduction)
 _INTRO = re.compile(
     r"((?:\bmy name is|\bmy name's|\bi am|\bi'm|^this is|\bmera naam)\s+)"
@@ -55,6 +72,9 @@ def mask_pii(text: str | None) -> str | None:
     if not text:
         return text
     text = _EMAIL.sub("[email]", text)
+    text = _SECRET_CODE.sub(lambda m: m.group(1) + m.group(2) + "[code]", text)
+    text = _PASSWORD.sub(lambda m: m.group(1) + m.group(2) + "[secret]", text)
+    text = _RECORD_OF.sub(lambda m: m.group(1) + "[name]", text)
     text = _AADHAAR.sub("[id-number]", text)
     text = _PHONE.sub("[phone]", text)
     return _INTRO.sub(_intro, text)

@@ -8,15 +8,21 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, Query
 
 from ..config import Settings
-from ..clients import UpstreamError, assistant_analytics, knowledge_get
+from ..clients import (
+    UpstreamError,
+    assistant_analytics,
+    assistant_topics,
+    knowledge_get,
+)
 from ..db import Context, Jsonb, tx
-from ..deps import require_staff, settings_dep
+from ..deps import policy_role, require_staff, settings_dep
 
 router = APIRouter(tags=["analytics"])
 ASSISTANT_ROLES = (
     "college_admin",
     "admission_officer",
     "marketing_manager",
+    "management",
     "super_admin",
 )
 
@@ -112,6 +118,13 @@ def overview(
 ):
     since = datetime.now(timezone.utc) - timedelta(days=days)
     out: dict = {"period_days": days, "since": since, "role": ctx.role}
+    # Module B's numbers are not split by department, so faculty keep the widget-only view. Asked
+    # before the transaction opens: a slow Module B must not hold a database connection.
+    b = (
+        assistant_analytics(settings, ctx.tenant_id, since)
+        if ctx.role in ASSISTANT_ROLES
+        else None
+    )
     with tx(settings.database_url, ctx) as cur:
         out["sessions"] = _one(
             cur,
@@ -120,17 +133,14 @@ def overview(
             " from app.visitor_sessions where created_at >= %s",
             (since,),
         )
-        # Module B's numbers are not split by department, so faculty keep the widget-only view.
-        b = (
-            assistant_analytics(settings, ctx.tenant_id, since)
-            if ctx.role in ASSISTANT_ROLES
-            else None
-        )
         out["conversations"] = _conversations(cur, since, b and b["conversations"])
         if ctx.role in ASSISTANT_ROLES:
             # None means Module B was unreachable: the dashboard says so instead of showing
             # WhatsApp as zero.
-            out["assistant"] = b and {"by_channel": b["by_channel"]}
+            out["assistant"] = b and {
+                "by_channel": b["by_channel"],
+                "by_model": b.get("by_model", []),
+            }
         fb = _one(
             cur,
             "select count(*) filter (where kind = 'rating') as ratings,"
@@ -156,7 +166,8 @@ def overview(
         fb["reasons"] = cur.fetchall()
         out["feedback"] = fb
 
-        if ctx.role in ("college_admin", "admission_officer", "faculty"):
+        # Queue figures for the roles that work a queue (RLS limits them to their own queue).
+        if policy_role(ctx.role) in ("college_admin", "admission_officer", "faculty"):
             h = _one(
                 cur,
                 "select count(*) filter (where status <> 'resolved') as open,"
@@ -189,7 +200,12 @@ def overview(
                 (since,),
             )
 
-        if ctx.role in ("college_admin", "admission_officer", "marketing_manager"):
+        # Lead counts and the funnel (no names): the admission desk, marketing and management.
+        if policy_role(ctx.role) in (
+            "college_admin",
+            "admission_officer",
+            "marketing_manager",
+        ):
             leads = _one(
                 cur,
                 "select count(*) as total,"
@@ -220,7 +236,8 @@ def overview(
     return out
 
 
-QUALITY_ROLES = ("college_admin", "admission_officer")
+# Management sees how the assistant is doing (aggregated, personal details masked).
+QUALITY_ROLES = ("college_admin", "admission_officer", "management")
 
 
 @router.get(
@@ -245,18 +262,22 @@ def quality(
 
 @router.get(
     "/analytics/topics",
-    summary="Questions the assistant could not answer this week, most asked first (PRD F9.2; "
-    "from Module A, personal details masked)",
+    summary="Top intents and trending questions this week (from Module B) and questions the "
+    "assistant could not answer (from Module A); personal details masked (PRD F9.2)",
 )
 def topics(
     ctx: Context = Depends(require_staff(*QUALITY_ROLES)),
     settings: Settings = Depends(settings_dep),
 ):
+    since = datetime.now(timezone.utc) - timedelta(days=7)
+    b = assistant_topics(settings, ctx.tenant_id, since)
+    asked = {"intents": b["intents"], "trending": b["trending"]} if b else {}
     try:
         report = knowledge_get(settings, "/reports/weekly", ctx.tenant_id)
     except UpstreamError:
-        return {"available": False}
+        return {"available": False, **asked}
     return {
+        **asked,
         "available": True,
         "week": report.get("week"),
         "unanswered": [

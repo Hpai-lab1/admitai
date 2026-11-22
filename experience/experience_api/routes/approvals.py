@@ -3,16 +3,21 @@ knowledge base; Module C shows them to the right people and records their decisi
 
 from __future__ import annotations
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..clients import UpstreamError, knowledge_get, knowledge_post
 from ..config import Settings
 from ..db import Context, audit, tx
-from ..deps import require_staff, settings_dep
+from ..deps import DEPARTMENT_ROLES, require_staff, settings_dep
 from ..schemas import DecideIn, DelegatesIn, PeakSeasonIn, SecondReviewIn
 
 router = APIRouter(tags=["approvals"])
-APPROVERS = require_staff("college_admin", "admission_officer", "faculty")
+# An admission counsellor suggests corrections but approves none (README, "Staff roles").
+APPROVERS = require_staff("college_admin", "admission_officer", *DEPARTMENT_ROLES)
+KNOWLEDGE_READERS = require_staff(
+    "college_admin", "admission_officer", "admission_counsellor", *DEPARTMENT_ROLES
+)
 
 
 def _upstream(fn, *args):
@@ -23,11 +28,12 @@ def _upstream(fn, *args):
 
 
 def can_decide(ctx: Context, proposal: dict) -> bool:
-    """College admins decide everything; faculty only their departments; officers the rest."""
+    """College admins decide everything; faculty, finance and hostel staff only their
+    departments; officers the rest."""
     dept = proposal.get("department")
     if ctx.role == "college_admin":
         return True
-    if ctx.role == "faculty":
+    if ctx.role in DEPARTMENT_ROLES:
         return dept is not None and dept in ctx.departments
     return dept is None
 
@@ -213,12 +219,43 @@ def second_review(
     return result
 
 
+# A model draft takes seconds to a minute on the shared model service.
+DRAFT_TIMEOUT = httpx.Timeout(120.0, connect=5.0)
+
+
+@router.post(
+    "/approvals/{proposal_id}/draft",
+    summary="Draft the missing answer from the college's documents (Module A), with its sources, "
+    "for you to check and edit before approving",
+)
+def draft_answer(
+    proposal_id: str,
+    ctx: Context = Depends(APPROVERS),
+    settings: Settings = Depends(settings_dep),
+):
+    if proposal_id not in {str(p["id"]) for p in _proposals(settings, ctx)}:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not in your inbox")
+    return _upstream(
+        knowledge_post,
+        settings,
+        f"/improvements/{proposal_id}/draft",
+        ctx.tenant_id,
+        {},
+        "POST",
+        DRAFT_TIMEOUT,
+    )
+
+
 @router.post("/approvals/decide", summary="Approve or reject several proposals at once")
 def decide(
     body: DecideIn,
     ctx: Context = Depends(APPROVERS),
     settings: Settings = Depends(settings_dep),
 ):
+    if body.publish_now and (body.decision != "approve" or ctx.role != "college_admin"):
+        raise HTTPException(
+            403, "Only the College Admin can publish a change before it is tested"
+        )
     allowed = {str(p["id"]) for p in _proposals(settings, ctx)}
     ids = list(dict.fromkeys(body.ids))
     rejected_by_gate = (
@@ -244,7 +281,11 @@ def decide(
                 settings,
                 f"/improvements/{pid}/{body.decision}",
                 ctx.tenant_id,
-                {"decided_by": str(ctx.profile_id), "note": note},
+                {
+                    "decided_by": str(ctx.profile_id),
+                    "note": note,
+                    "publish_now": body.publish_now,
+                },
             )
             results.append({"id": pid, "ok": True})
         except UpstreamError as exc:
@@ -255,10 +296,13 @@ def decide(
                 audit(
                     cur,
                     ctx,
-                    f"improvement.{body.decision}",
+                    # an urgent fix is audited as its own action (it skips the test before going live)
+                    "improvement.publish_now"
+                    if body.publish_now
+                    else f"improvement.{body.decision}",
                     "improvement",
                     r["id"],
-                    after={"note": body.note},
+                    after={"note": body.note, "publish_now": body.publish_now},
                 )
     return {"results": results}
 
@@ -273,7 +317,10 @@ def approval_history(
     data = _upstream(knowledge_get, settings, "/improvements", ctx.tenant_id, None)
     items = data.get("items", data) if isinstance(data, dict) else data
     mine = [p for p in items if p.get("status") != "pending" and can_decide(ctx, p)]
-    mine.sort(key=lambda p: p.get("created_at", ""), reverse=True)
+    # The latest decision first, so an approval just made is at the top.
+    mine.sort(
+        key=lambda p: p.get("decided_at") or p.get("created_at") or "", reverse=True
+    )
     out = []
     for p in mine[:30]:
         if p.get("eval_run_id") and p.get("status") in (
@@ -316,7 +363,8 @@ def rollback(
     summary="Documents in the knowledge base (from Module A)",
 )
 def kb_documents(
-    ctx: Context = Depends(APPROVERS), settings: Settings = Depends(settings_dep)
+    ctx: Context = Depends(KNOWLEDGE_READERS),
+    settings: Settings = Depends(settings_dep),
 ):
     return _upstream(knowledge_get, settings, "/kb/documents", ctx.tenant_id, None)
 
@@ -325,6 +373,7 @@ def kb_documents(
     "/curated-qa", tags=["knowledge"], summary="Curated answers (from Module A)"
 )
 def curated_qa(
-    ctx: Context = Depends(APPROVERS), settings: Settings = Depends(settings_dep)
+    ctx: Context = Depends(KNOWLEDGE_READERS),
+    settings: Settings = Depends(settings_dep),
 ):
     return _upstream(knowledge_get, settings, "/curated-qa", ctx.tenant_id, None)

@@ -11,6 +11,7 @@ Fix ladder (8.3): 1 knowledge (curated answer, document action), 2 retrieval, 3 
 
 from __future__ import annotations
 
+import logging
 import argparse
 import math
 import sys
@@ -18,6 +19,8 @@ from datetime import date, datetime, timedelta, timezone
 
 import numpy as np
 
+from . import curated
+from .by_design import not_answerable_by_design
 from .assistant_client import Assistant, AssistantClient, AssistantError
 from .pii import mask_pii
 from .config import Settings
@@ -90,6 +93,21 @@ def erase_conversations(cur, conversation_ids: list[str]) -> dict:
         (conversation_ids,),
     )
     events = cur.rowcount
+    # The self-learning layer's copies (empty unless it is on); lessons keep only counts. Its
+    # tables exist only once migration 010 has run: erasure must work on a database without it.
+    cur.execute("select to_regclass('learn.feedback_events') is not null as present")
+    if cur.fetchone()["present"]:
+        cur.execute(
+            "update learn.feedback_analysis set claim = null, reasoning = null where feedback_id in"
+            " (select id from learn.feedback_events where conversation_id = any(%s))",
+            (conversation_ids,),
+        )
+        cur.execute(
+            "update learn.feedback_events set question = '[erased]', answer = null, comment = null,"
+            " conversation_id = null, message_id = null, trace_id = null"
+            " where conversation_id = any(%s)",
+            (conversation_ids,),
+        )
     cur.execute(
         "update learn.proposals set examples = coalesce((select jsonb_agg(e) from"
         " jsonb_array_elements(examples) e where not (e->>'conversation_id' = any(%s))), '[]')"
@@ -162,8 +180,19 @@ def ingest(settings: Settings, assistant: Assistant, tenant: str) -> dict:
                     "comment": p.get("comment"),
                 }
             )
-        elif p.get("kind") == "rating" and int(p.get("value", 5)) <= 2:
-            rows.append({**base, "kind": "low_rating", "comment": p.get("comment")})
+        elif p.get("kind") == "rating" and (
+            int(p.get("value", 5)) <= 2
+            or (int(p.get("value", 5)) == 3 and p.get("reason"))
+        ):
+            # the widget's dropdown after the stars (19 Nov 2026): "out of date", "other" + words
+            rows.append(
+                {
+                    **base,
+                    "kind": "low_rating",
+                    "reason": p.get("reason"),
+                    "comment": p.get("comment"),
+                }
+            )
         elif ev["type"] == "signal.logged" and p.get("kind") in IMPLICIT:
             rows.append(
                 {
@@ -260,6 +289,9 @@ def triage(s: dict) -> tuple[str | None, str]:
     numbers match a cited source, so an answered, cited response is presumed correct unless the
     visitor says it is wrong or outdated."""
     kind, reason = s["kind"], (s.get("reason") or "")
+    if not_answerable_by_design(s.get("question")):
+        # Injection, account secrets, another person's records, guarantees: never a curated answer.
+        return None, "not_answerable"
     question = (s.get("question") or "").lower()
     answered = s.get("outcome") in ("answered", "partial") and bool(s.get("sources"))
     if kind in ("thumb_up", "low_rating"):
@@ -310,6 +342,18 @@ def _embed(embedder: Embedder, text: str) -> np.ndarray:
     return v / max(float(np.linalg.norm(v)), 1e-9)
 
 
+def cited_answer(signals: list[dict]) -> str | None:
+    """The one curated answer the corrected replies cited, if exactly one: a correction of that
+    answer must become its new version, not a second answer to a reworded question."""
+    ids = {
+        src["ref_id"]
+        for s in signals
+        for src in s.get("sources") or []
+        if src.get("source_type") == "curated_qa" and src.get("ref_id")
+    }
+    return ids.pop() if len(ids) == 1 else None
+
+
 def _target(s: dict) -> dict | None:
     """The source an 'outdated' report is about: the first cited non-catalogue source."""
     for src in s.get("sources") or []:
@@ -346,14 +390,14 @@ def _content(cause: str, signals: list[dict]) -> dict:
                 "diff": {"question": q, "answer": None, "old_answer": s0.get("answer")},
             }
         if corrected:
+            corrected = curated.strip_citation_markers(corrected)
+            diff = {"question": q, "answer": corrected, "old_answer": s0.get("answer")}
+            if qa_id := cited_answer(signals):
+                diff["corrects_qa_id"] = qa_id
             return {
                 "title": f"Expert correction: {q[:90]}",
                 "proposal": corrected,
-                "diff": {
-                    "question": q,
-                    "answer": corrected,
-                    "old_answer": s0.get("answer"),
-                },
+                "diff": diff,
             }
         return {
             "title": f"No reliable answer ({n}x): {q[:80]}",
@@ -480,13 +524,29 @@ def propose(
             match = None
             if cause == "outdated":
                 tgt = (_target(s) or {}).get("ref_id")
+                # A catalogue source has no document id: a report about the same catalogue
+                # source joins its open proposal instead of opening a duplicate.
+                cat = (
+                    None
+                    if tgt
+                    else next(
+                        (x.get("title") for x in s.get("sources") or []),
+                        "the program catalogue",
+                    )
+                )
                 match = next(
                     (
                         p
                         for p in open_props
                         if p["root_cause"] == cause
-                        and tgt
-                        and p["diff"].get("ref_id") == tgt
+                        and (
+                            (tgt and p["diff"].get("ref_id") == tgt)
+                            or (
+                                cat
+                                and p["diff"].get("source_type") == "catalogue"
+                                and p["diff"].get("title") == cat
+                            )
+                        )
                     ),
                     None,
                 )
@@ -681,7 +741,39 @@ def public(p: dict) -> dict:
         "note": p["note"],
         "eval_run_id": str(p["eval_run_id"]) if p["eval_run_id"] else None,
         "created_at": p["created_at"].isoformat(),
+        "last_activity_at": (p.get("last_activity_at") or p["created_at"]).isoformat(),
+        "decided_at": p["decided_at"].isoformat() if p.get("decided_at") else None,
+        # College Admin's urgent fix: live before its test; taken down if the test failed
+        "published_early": bool((p.get("deployed_ref") or {}).get("published_early")),
+        "taken_down": bool((p.get("deployed_ref") or {}).get("taken_down")),
     }
+
+
+def propose_waiting_corrections(
+    settings: Settings, embedder: Embedder, assistant: Assistant
+) -> list[str]:
+    """At start-up: a staff correction whose instant proposal was cut off by a restart (Module A
+    had stored the event but not grouped it) reaches the Approvals inbox now, not at the nightly
+    run. Returns the tenants handled."""
+    import psycopg
+
+    with psycopg.connect(settings.worker_database_url) as conn:
+        tenants = [
+            str(r[0])
+            for r in conn.execute(
+                "select distinct tenant_id from learn.events"
+                " where type = 'correction.submitted' and processed_at is null"
+            )
+        ]
+    for tenant in tenants:
+        try:
+            ingest(settings, assistant, tenant)
+            propose(settings, embedder, tenant)
+        except Exception:  # noqa: BLE001 - the nightly run picks it up
+            logging.getLogger("admitai.learn").exception(
+                "waiting corrections for %s", tenant
+            )
+    return tenants
 
 
 def run(
@@ -693,7 +785,7 @@ def run(
 
     report = {
         "recovered": gate.recover_interrupted(settings)
-        if settings.admin_database_url
+        if settings.worker_database_url
         else {}
     }
     report["ingested"] = ingest(settings, assistant, tenant)
@@ -722,4 +814,14 @@ if __name__ == "__main__":
     s = Settings()
     if not s.database_url:
         sys.exit("Set KB_DATABASE_URL (source local.env.sh)")
-    print(run(s, make_embedder(s), AssistantClient(s), a.tenant_id))
+    b = AssistantClient(s)
+    report = run(s, make_embedder(s), b, a.tenant_id)
+    # Approvals are tested on the questions they can affect; the whole set runs here, nightly
+    # (not in "Run the Feedback Analyst now", which must stay quick).
+    from . import gate
+
+    try:
+        report["full_test"] = gate.nightly_full_test(s, b, a.tenant_id)
+    except Exception as exc:  # noqa: BLE001 - the rest of the nightly run still counts
+        report["full_test"] = {"error": str(exc)[:200]}
+    print(report)

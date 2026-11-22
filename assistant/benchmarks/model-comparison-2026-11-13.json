@@ -1,0 +1,78 @@
+{
+ "date": "2026-11-13",
+ "harness": "knowledge_api.comparison (Module A): the college's test set answered through Module B in a sandbox copy, per model",
+ "college": "RUAS demo pack",
+ "hardware": "lab server, shared Ollama (GPU); Q4_K_M quantisation; LiteLLM 1.106.3 gateway",
+ "router_model": "local/llama3.1-8b (both runs: only the answer model changes)",
+ "not_run": "DeepSeek-R1 distills and Qwen2.5-14B-Instruct: not installed on the shared Ollama (13 Nov 2026)",
+ "models": [
+  {
+   "model": "local/llama3.1-8b",
+   "run_id": "839c0414-656f-4a1a-aba1-55d2b1e426f7",
+   "accuracy": 0.5583,
+   "refusal": 0.9231,
+   "groundedness": 0.6614,
+   "routing": 0.9387,
+   "cases": 373,
+   "latency_p50_s": 3.034,
+   "latency_p95_s": 4.715,
+   "first_sentence_p50_s": 2.633,
+   "first_sentence_p95_s": 3.236,
+   "review_error": null,
+   "answered_by_requested_model": 1.0,
+   "models_seen": [
+    "local/llama3.1-8b"
+   ],
+   "loaded_models": [
+    {
+     "name": "llama3.1:8b-instruct-q4_K_M",
+     "vram_gb": 5.93,
+     "size_gb": 5.93
+    },
+    {
+     "name": "nomic-embed-text:latest",
+     "vram_gb": 0.32,
+     "size_gb": 0.32
+    }
+   ]
+  },
+  {
+   "model": "local/qwen2.5-coder-14b",
+   "run_id": "f338c4cb-c0c9-4df3-b571-c448bb832ded",
+   "accuracy": 0.575,
+   "refusal": 0.9231,
+   "groundedness": 0.7829,
+   "routing": 0.9387,
+   "cases": 373,
+   "latency_p50_s": 3.62,
+   "latency_p95_s": 7.333,
+   "first_sentence_p50_s": 3.303,
+   "first_sentence_p95_s": 4.48,
+   "review_error": null,
+   "answered_by_requested_model": 0.997,
+   "models_seen": [
+    "local/llama3.1-8b",
+    "local/qwen2.5-coder-14b"
+   ],
+   "loaded_models": [
+    {
+     "name": "llama3.1:8b-instruct-q4_K_M",
+     "vram_gb": 5.93,
+     "size_gb": 5.93
+    },
+    {
+     "name": "qwen2.5-coder:14b-instruct-q4_K_M",
+     "vram_gb": 10.4,
+     "size_gb": 10.4
+    },
+    {
+     "name": "nomic-embed-text:latest",
+     "vram_gb": 0.32,
+     "size_gb": 0.32
+    }
+   ]
+  }
+ ],
+ "best_accuracy": "local/qwen2.5-coder-14b",
+ "gpu_memory_measured": true
+}

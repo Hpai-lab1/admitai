@@ -42,3 +42,7 @@ Thumbs.db
 # Personal Claude Code overrides
 .claude/settings.local.json
 CLAUDE.local.md
+
+# Local demo and secrets (never commit)
+local.secrets.sh
+.local/

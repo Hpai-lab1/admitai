@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api";
 import { STRINGS, type Lang, type Strings } from "@/lib/i18n";
-import { visitor, type TenantInfo } from "@/lib/widget-api";
+import { hasContactConsent, myConsents, visitor, type TenantInfo } from "@/lib/widget-api";
 
 type Intent = "callback" | "enquiry";
 type Step = "consent" | "age" | "adult" | "guardian" | "code" | "minor" | "done";
@@ -26,6 +26,10 @@ type Props = {
   score?: number;
   /** Module B detected an under-18 enquirer: skip the age question, go to the guardian. */
   knownMinor?: boolean;
+  /** The visitor already said they are 18 or over in this chat: skip the age question. */
+  knownAdult?: boolean;
+  /** Told when the visitor answers the age question, so the widget need not ask again. */
+  onAge?: (minor: boolean) => void;
   onClose: (message?: string) => void;
 };
 
@@ -44,6 +48,8 @@ export function ContactFlow({
   programs,
   score,
   knownMinor = false,
+  knownAdult = false,
+  onAge,
   onClose,
 }: Props) {
   const t = STRINGS[lang];
@@ -85,12 +91,33 @@ export function ContactFlow({
   }
 
   const tv = tenant.consent_text_version;
+  const afterConsent: Step = knownMinor ? "guardian" : knownAdult ? "adult" : "age";
+  // Fewer steps: a visitor who already agreed in this chat, to this wording, is not asked again.
+  // The consent step shows at once (most visitors are here for the first time) and is skipped as
+  // soon as an earlier yes is found.
+  const [reused, setReused] = useState(false);
+  useEffect(() => {
+    let live = true;
+    myConsents(token)
+      .then((list) => {
+        if (live && hasContactConsent(list, tv)) {
+          setReused(true);
+          setStep((s) => (s === "consent" ? afterConsent : s));
+        }
+      })
+      .catch(() => {}); // the consent step stays, as before
+    return () => {
+      live = false;
+    };
+    // Once, when the form opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const agree = () =>
     run(async () => {
       await visitor(token, "/consents", { purpose: "contact", granted: true, text_version: tv });
       await visitor(token, "/consents", { purpose: "marketing", granted: marketing, text_version: tv });
-      setStep(knownMinor ? "guardian" : "age");
+      setStep(afterConsent);
     });
 
   async function finish(isMinor: boolean, preferredChannel: Channel) {
@@ -186,6 +213,12 @@ export function ContactFlow({
         </p>
       )}
 
+      {reused && step !== "done" && (
+        <p role="status" className="mb-3 text-sm text-muted">
+          {t.consentReused}
+        </p>
+      )}
+
       {step === "consent" && (
         <div className="space-y-4 text-sm">
           <p>{t.consentText(tenant.name)}</p>
@@ -232,10 +265,22 @@ export function ContactFlow({
         <fieldset className="space-y-3 text-sm">
           <legend className="mb-2">{t.ageQ}</legend>
           <div className="flex gap-2">
-            <button className="btn-primary" onClick={() => setStep("adult")}>
+            <button
+              className="btn-primary"
+              onClick={() => {
+                onAge?.(false);
+                setStep("adult");
+              }}
+            >
               {t.adult}
             </button>
-            <button className="btn-secondary" onClick={() => setStep("guardian")}>
+            <button
+              className="btn-secondary"
+              onClick={() => {
+                onAge?.(true);
+                setStep("guardian");
+              }}
+            >
               {t.minor}
             </button>
           </div>

@@ -39,7 +39,12 @@ def knowledge_get(
 
 
 def knowledge_post(
-    settings: Settings, path: str, tenant_id: UUID, body: dict, method: str = "POST"
+    settings: Settings,
+    path: str,
+    tenant_id: UUID,
+    body: dict,
+    method: str = "POST",
+    timeout: httpx.Timeout = TIMEOUT,
 ):
     try:
         r = httpx.request(
@@ -50,7 +55,7 @@ def knowledge_post(
                 "X-Tenant-Id": str(tenant_id),
                 "X-Service-Key": settings.key_to_knowledge,
             },
-            timeout=TIMEOUT,
+            timeout=timeout,
         )
         if 400 <= r.status_code < 500:
             # Module A's reason is meant for staff ("Write the answer in the note ..."); pass it on.
@@ -156,6 +161,29 @@ def assistant_analytics(settings: Settings, tenant_id: UUID, since) -> dict | No
         return None
 
 
+def assistant_topics(settings: Settings, tenant_id: UUID, since) -> dict | None:
+    """Module B's top intents and trending questions (PRD F9.2), or None if B is unavailable."""
+    if not settings.key_to_assistant:
+        return None
+    try:
+        r = httpx.get(
+            f"{settings.assistant_api_url}/analytics/topics",
+            params={"since": since.isoformat()},
+            headers={
+                "X-Service-Key": settings.key_to_assistant,
+                "X-Tenant-Id": str(tenant_id),
+            },
+            timeout=TIMEOUT,
+        )
+        r.raise_for_status()
+        body = r.json()
+    except (httpx.HTTPError, ValueError):
+        return None
+    if not isinstance(body, dict) or not {"intents", "trending"} <= body.keys():
+        return None
+    return body
+
+
 def handoff_package(view: dict) -> dict:
     """F3.3: transcript, the AI's last answer as a draft, the sources it used, trace and confidence."""
     msgs = view.get("messages", [])
@@ -214,6 +242,23 @@ def _erase_in_assistant(cur, settings: Settings, tenant_id: UUID, ev: dict) -> d
         "update app.outbox_events set payload = %s where id = %s", (Jsonb(p), ev["id"])
     )
     return p
+
+
+def deliver_waiting(settings: Settings) -> int:
+    """Every minute: events still in the outbox (Module A was down or restarting when a
+    correction or rating was saved) are sent again, instead of waiting for the next staff
+    action or the nightly job. Returns how many were delivered."""
+    import psycopg
+
+    with psycopg.connect(settings.worker_database_url) as conn:
+        tenants = [
+            r[0]
+            for r in conn.execute(
+                "select distinct tenant_id from app.outbox_events where delivered_at is null"
+                " and (attempts < 10 or type = 'erasure.requested')"
+            )
+        ]
+    return sum(dispatch_events(settings, t) for t in tenants)
 
 
 def dispatch_events(settings: Settings, tenant_id: UUID, limit: int = 50) -> int:

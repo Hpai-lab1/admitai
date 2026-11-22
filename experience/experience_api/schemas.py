@@ -11,7 +11,26 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 Role = Literal[
-    "super_admin", "college_admin", "admission_officer", "faculty", "marketing_manager"
+    "super_admin",
+    "college_admin",
+    "admission_officer",
+    "faculty",
+    "marketing_manager",
+    "admission_counsellor",
+    "finance_officer",
+    "hostel_warden",
+    "management",
+]
+# Roles a College Admin can give (the platform admin is not one of them).
+CollegeRole = Literal[
+    "college_admin",
+    "admission_officer",
+    "faculty",
+    "marketing_manager",
+    "admission_counsellor",
+    "finance_officer",
+    "hostel_warden",
+    "management",
 ]
 Queue = Literal["admission", "faculty"]
 ContactChannel = Literal["phone", "email", "whatsapp"]
@@ -101,6 +120,9 @@ class Me(BaseModel):
     departments: list[str]
     mfa_enabled: bool
     tenant: dict
+    # What this server can actually deliver, so the console never offers a channel that would
+    # only queue forever: e-mail (SMTP), SMS (a provider) and browser push (a VAPID key).
+    channels: dict[str, bool] = Field(default_factory=dict)
 
 
 # ------------------------------------------------------------------ widget
@@ -227,6 +249,11 @@ class ReplyIn(Model):
         " a minor's guardian who verified on WhatsApp (PRD F3.6). Outside the 24-hour window only"
         " the college's approved template can be sent.",
     )
+    send_sms: bool = Field(
+        default=False,
+        description="Also send the reply by SMS to the applicant's mobile number (adults only; a"
+        " minor's guardian agreed to e-mail or WhatsApp). Long replies are shortened to three SMS.",
+    )
 
 
 # ------------------------------------------------------------------ consent and leads
@@ -255,7 +282,7 @@ class GuardianStartIn(Model):
         max_length=200,
         description="Guardian's e-mail, or WhatsApp number with country code",
     )
-    language: Literal["en", "hi"] = Field(
+    language: Literal["en", "hi", "kn"] = Field(
         default="en", description="Language of the WhatsApp code message"
     )
 
@@ -394,6 +421,8 @@ class DecideIn(Model):
     ids: list[str] = Field(min_length=1, max_length=50)
     decision: Literal["approve", "reject"]
     note: str | None = Field(default=None, max_length=500)
+    # College Admin only: live within seconds, tested afterwards, taken down if the tests fail.
+    publish_now: bool = False
 
 
 class SecondReviewIn(Model):
@@ -414,7 +443,7 @@ class DelegatesIn(Model):
 class UserIn(Model):
     email: str
     full_name: str = Field(min_length=1, max_length=120)
-    role: Literal["college_admin", "admission_officer", "faculty", "marketing_manager"]
+    role: CollegeRole
     departments: list[str] = Field(default_factory=list, max_length=20)
 
     @field_validator("email")
@@ -428,10 +457,7 @@ class UserIn(Model):
 
 class UserPatch(Model):
     full_name: str | None = Field(default=None, max_length=120)
-    role: (
-        Literal["college_admin", "admission_officer", "faculty", "marketing_manager"]
-        | None
-    ) = None
+    role: CollegeRole | None = None
     departments: list[str] | None = Field(default=None, max_length=20)
     is_active: bool | None = None
     reset_mfa: bool = False
@@ -452,6 +478,18 @@ class UserCreated(User):
     temporary_password: str = Field(
         description="Shown once; the person changes it after first sign-in"
     )
+
+
+class LocalText(Model):
+    """The college's own widget texts in one more language. Anything left out is not shown in
+    that language (rather than shown in English), except the name and greeting, which fall back
+    to the widget's own wording."""
+
+    assistant_name: str | None = Field(default=None, max_length=60)
+    greeting: str | None = Field(default=None, max_length=300)
+    announcement: str | None = Field(default=None, max_length=200)
+    starter_questions: list[str] = Field(default_factory=list, max_length=8)
+    topics: list[str] = Field(default_factory=list, max_length=10)
 
 
 class TenantConfig(Model):
@@ -479,6 +517,10 @@ class TenantConfig(Model):
         default_factory=list,
         max_length=10,
         description="Quick topic chips, like the admissions menu on the college site",
+    )
+    translations: dict[Literal["hi", "kn"], LocalText] = Field(
+        default_factory=dict,
+        description="The texts above in Hindi and Kannada, for visitors who choose them",
     )
 
 

@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 import { CorrectionForm } from "@/components/console/CorrectionForm";
+import { ReviewText, type ReviewTextState } from "@/components/console/ReviewText";
+import { CorrectionStage, type Stage } from "@/components/console/CorrectionStage";
 import { useMe } from "@/components/console/Shell";
-import { Badge, Empty, Loading, Notice, PageHeader, useApi } from "@/components/console/ui";
+import { Badge, Empty, Loading, Notice, PageHeader, useApi, useRefreshWhile } from "@/components/console/ui";
+import { isAnalyticsOnly, isDepartmentRole } from "@/lib/roles";
 import { shortDate } from "@/lib/time";
 
 type Row = {
@@ -19,6 +22,10 @@ type Row = {
   department: string | null;
   created_at: string;
   corrected: boolean;
+  question?: string | null;
+  answer?: string | null;
+  text?: ReviewTextState;
+  correction_stage?: Stage | null;
 };
 
 // Review queue of low-rated answers for this person's role and departments (PRD F7.4).
@@ -26,6 +33,11 @@ export default function Review() {
   const me = useMe();
   const [only, setOnly] = useState<"negative" | "all">("negative");
   const { data, error, loading, reload } = useApi<Row[]>(`/feedback?only=${only}&limit=200`);
+  // A correction on its way (being turned into a proposal, or tested): follow it live.
+  useRefreshWhile(
+    !!data?.some((r) => ["received", "testing", "live_testing"].includes(r.correction_stage ?? "")),
+    reload,
+  );
   const [open, setOpen] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -34,7 +46,7 @@ export default function Review() {
       <PageHeader
         title="Review answers"
         sub={
-          me.role === "faculty"
+          isDepartmentRole(me.role)
             ? `Answers about ${me.departments.join(", ")} that visitors marked as unhelpful.`
             : "Answers visitors marked as unhelpful. Correct them so the assistant improves."
         }
@@ -68,11 +80,23 @@ export default function Review() {
                 </Badge>
                 {r.reason && <Badge tone="amber">{r.reason.replace(/_/g, " ")}</Badge>}
                 <Badge>{r.department ?? "Admissions"}</Badge>
-                {r.corrected && <Badge tone="green">correction sent</Badge>}
                 <span className="ml-auto text-xs text-muted">{shortDate(r.created_at)}</span>
               </div>
-              {r.comment && <p className="mt-2 text-sm">“{r.comment}”</p>}
-              <p className="mt-1 text-xs text-muted">
+              <ReviewText text={r.text} question={r.question} answer={r.answer} />
+              {r.correction_stage && (
+                <p className="mt-2">
+                  <CorrectionStage stage={r.correction_stage} />
+                </p>
+              )}
+              {r.comment && (
+                <p className="mt-2 text-sm">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+                    Visitor&apos;s comment{" "}
+                  </span>
+                  “{r.comment}”
+                </p>
+              )}
+              <p className="mt-2 text-xs text-muted">
                 Conversation {r.conversation_id} · message {r.message_id}
               </p>
               {open === r.id ? (
@@ -80,6 +104,8 @@ export default function Review() {
                   conversationId={r.conversation_id}
                   messageId={r.message_id}
                   traceId={r.trace_id}
+                  originalAnswer={r.answer}
+                  question={r.question}
                   onCancel={() => setOpen(null)}
                   onDone={(m) => {
                     setOpen(null);
@@ -89,8 +115,8 @@ export default function Review() {
                 />
               ) : (
                 !r.corrected &&
-                me.role !== "marketing_manager" && (
-                  <button className="btn-secondary mt-3" onClick={() => setOpen(r.id)}>
+                !isAnalyticsOnly(me.role) && (
+                  <button className="btn-quiet mt-3" onClick={() => setOpen(r.id)}>
                     Correct this answer
                   </button>
                 )

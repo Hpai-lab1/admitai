@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Literal
 
+import httpx
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -18,9 +19,11 @@ from fastapi import (
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
+from ..by_design import not_answerable_by_design
 from .. import (
     catalogue_cases,
     comparison,
+    drafting,
     gate,
     health,
     judge,
@@ -57,17 +60,41 @@ def list_improvements(
     with tx(settings.database_url, tenant) as cur:
         peak = learning.peak_season(cur)
         cur.execute(
-            "select * from learn.proposals where (%s::text is null or status = %s)"
+            # last_activity_at: when the newest feedback or correction joined it, so the inbox can
+            # show the latest first (a correction often joins an existing proposal).
+            "select *, coalesce((select max(s.occurred_at) from learn.signals s"
+            " where s.proposal_id = learn.proposals.id), created_at) as last_activity_at"
+            " from learn.proposals where (%s::text is null or status = %s)"
             " and (%s::text is null or second_review = %s)"
             " order by impact_score desc, created_at",
             (status_, status_, second_review, second_review),
         )
-        rows = cur.fetchall()
-    # Peak season (8.3): lower-severity proposals wait until after the peak.
-    held = [p for p in rows if learning.held_in_peak(p, peak)]
-    shown = rows if include_held else [p for p in rows if p not in held]
+        rows = [
+            p
+            for p in cur.fetchall()
+            # proposals made before 18 Nov 2026 for injection, secrets, others' records or
+            # guarantees stay in the database but are not shown as work for staff
+            if not (
+                p["status"] == "pending" and not_answerable_by_design(p.get("title"))
+            )
+        ]
+        # Peak season (8.3): lower-severity proposals wait until after the peak.
+        held = [p for p in rows if learning.held_in_peak(p, peak)]
+        shown = rows if include_held else [p for p in rows if p not in held]
+        items = []
+        for p in shown:
+            item = learning.public(p)
+            if p["kind"] == "curated_answer" and p["status"] == "pending":
+                # A correction whose fee differs from the catalogue would not change the chat
+                # (catalogue wins): the approver is told, with the catalogue's figures.
+                d = p["diff"] or {}
+                text = f"{d.get('question') or ''} {d.get('answer') or ''}"
+                item["catalogue_conflicts"] = health.conflicts_in(cur, text)
+                # approving changes these official fees (after the test)
+                item["fee_changes"] = health.fee_changes(cur, text)
+            items.append(item)
     return {
-        "items": [learning.public(p) for p in shown],
+        "items": items,
         "peak_season": peak,
         "held": len(held),
     }
@@ -143,6 +170,66 @@ def put_learning_settings(
         return cur.fetchone()
 
 
+# Where each staff correction is on its way to visitors (Module C's review page). Before
+# /improvements/{proposal_id}, which would otherwise take "corrections" as an id.
+_STAGE = {
+    "pending": "waiting_approval",
+    "approved": "testing",
+    "evaluating": "testing",
+    "deployed": "live",
+    "failed_gate": "failed",
+    "rejected": "rejected",
+    "rolled_back": "rolled_back",
+}
+
+
+@router.get(
+    "/improvements/corrections",
+    tags=["improvements"],
+    summary="Where staff corrections are: received, waiting for approval, being tested, live, ...",
+)
+def correction_stages(
+    ids: str = Query(
+        ..., max_length=8000, description="Comma-separated correction ids"
+    ),
+    tenant: str = Depends(tenant_dep),
+    settings: Settings = Depends(settings_dep),
+):
+    wanted = [i for i in (x.strip() for x in ids.split(",")) if i][:200]
+    with tx(settings.database_url, tenant) as cur:
+        cur.execute(
+            "select e.payload->>'correction_id' as correction_id, e.processed_at,"
+            " p.id as proposal_id, p.status, p.title, p.deployed_ref"
+            " from learn.events e"
+            " left join learn.signals s on s.source_ref = 'event:' || e.event_id"
+            " left join learn.proposals p on p.id = s.proposal_id"
+            " where e.type = 'correction.submitted'"
+            " and e.payload->>'correction_id' = any(%s)",
+            (wanted,),
+        )
+        rows = cur.fetchall()
+    out = {}
+    for r in rows:
+        ref = r.get("deployed_ref") or {}
+        if r["proposal_id"] and ref.get("published_early"):
+            # College Admin's urgent fix: live while tested, or taken down after a failed test
+            stage = {"evaluating": "live_testing", "failed_gate": "taken_down"}.get(
+                r["status"], _STAGE.get(r["status"], "waiting_approval")
+            )
+        elif r["proposal_id"]:
+            stage = _STAGE.get(r["status"], "waiting_approval")
+        elif r["processed_at"] is None:
+            stage = "received"  # waits for the Feedback Analyst (nightly, or on demand)
+        else:
+            stage = "not_used"  # analysed, but it did not become a change
+        out[r["correction_id"]] = {
+            "stage": stage,
+            "proposal_id": str(r["proposal_id"]) if r["proposal_id"] else None,
+            "title": r["title"],
+        }
+    return {"items": out}
+
+
 @router.get("/improvements/{proposal_id}", tags=["improvements"])
 def get_improvement(
     proposal_id: str,
@@ -167,6 +254,9 @@ def get_improvement(
 class DecideIn(BaseModel):
     decided_by: str | None = None
     note: str | None = Field(default=None, max_length=4000)
+    # College Admin's urgent fix: live within seconds, tested afterwards, and taken down
+    # automatically if the test fails (Module C allows it to the College Admin only).
+    publish_now: bool = False
 
 
 @router.post(
@@ -223,6 +313,50 @@ def second_review(
         )
     except quality.SecondReviewError as exc:
         raise HTTPException(exc.status, str(exc)) from None
+
+
+def draft_model_dep(request: Request, settings: Settings = Depends(settings_dep)):
+    model = getattr(request.app.state, "draft_model", None)
+    return model or drafting.GatewayDraftModel(settings)
+
+
+# Before /improvements/{id}/{decision}, which would otherwise take "draft" as a decision.
+@router.post(
+    "/improvements/{proposal_id}/draft",
+    tags=["improvements"],
+    summary="Draft the missing answer from the college's approved documents, with its sources, "
+    "for the approver to edit (nothing goes live from here)",
+)
+def draft_answer(
+    proposal_id: str,
+    tenant: str = Depends(tenant_dep),
+    settings: Settings = Depends(settings_dep),
+    embedder: Embedder = Depends(embedder_dep),
+    model=Depends(draft_model_dep),
+):
+    with tx(settings.database_url, tenant) as cur:
+        cur.execute("select * from learn.proposals where id::text = %s", (proposal_id,))
+        p = cur.fetchone()
+    if p is None:
+        raise HTTPException(404, "Proposal not found")
+    diff = p["diff"] or {}
+    if p["status"] != "pending" or not diff.get("question") or diff.get("answer"):
+        raise HTTPException(
+            409, "Only a pending proposal that still needs an answer can be drafted"
+        )
+    try:
+        result = drafting.draft(settings, embedder, model, tenant, diff["question"])
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            502,
+            f"The model service could not draft an answer ({exc.__class__.__name__})",
+        ) from None
+    with tx(settings.database_url, tenant) as cur:
+        cur.execute(
+            "update learn.proposals set diff = diff || %s where id = %s and status = 'pending'",
+            (Jsonb({"draft": result}), p["id"]),
+        )
+    return {"draft": result}
 
 
 @router.post(
@@ -288,10 +422,15 @@ def decide(
                     422, "Write the answer in the note when approving a knowledge gap"
                 )
             status = "evaluating"
+        if body.publish_now and status != "evaluating":
+            raise HTTPException(
+                422, "Only an answer or document change can be published at once"
+            )
         cur.execute(
             "update learn.proposals set status=%s, decided_by=coalesce(%s, decided_by), decided_at=now(),"
+            " deployed_ref = case when %s = 'evaluating' then null else deployed_ref end,"
             " note=coalesce(%s, note), updated_at=now() where id=%s",
-            (status, body.decided_by, body.note, p["id"]),
+            (status, body.decided_by, status, body.note, p["id"]),
         )
         cur.execute("select * from learn.proposals where id = %s", (p["id"],))
         out = learning.public(cur.fetchone())
@@ -305,6 +444,7 @@ def decide(
             proposal_id,
             body.note,
             settings.eval_max_cases,
+            body.publish_now,
         )
     return out
 

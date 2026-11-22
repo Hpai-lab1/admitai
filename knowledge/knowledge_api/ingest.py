@@ -42,6 +42,9 @@ class Block:
     level: int = 0  # 0 = paragraph; 1-3 = heading level
     page: int | None = None
     ocr: bool = False  # text recognised from a scanned page (F4.1)
+    # An HTML table cell: (table, row, column, column span, header cell). Lets table_rows() keep a
+    # row together with its column headings ("Total Credits: 4") instead of loose numbers.
+    cell: tuple[int, int, int, int, bool] | None = None
 
 
 @dataclass
@@ -254,12 +257,40 @@ class _HTMLText(HTMLParser):
         self.title = ""
         self._in_title = False
         self.links: list[str] = []
+        self.tables: list[dict] = []  # open tables, innermost last
+        self.n_tables = 0
+        self.cell: tuple[int, int, int, int, bool] | None = None
 
     def _flush(self) -> None:
         text = clean(" ".join(self.buf))
         if text:
-            self.blocks.append(Block(text, level=self.heading))
+            self.blocks.append(Block(text, level=self.heading, cell=self.cell))
         self.buf = []
+
+    def _table_tag(self, tag: str, attrs) -> None:
+        if tag == "table":
+            self.tables.append(
+                {"id": self.n_tables, "row": -1, "col": 0, "head": False}
+            )
+            self.n_tables += 1
+            return
+        if not self.tables:
+            return
+        t = self.tables[-1]
+        if tag == "thead":
+            t["head"] = True
+        elif tag in ("tbody", "tfoot"):
+            t["head"] = False
+        elif tag == "tr":
+            t["row"], t["col"] = t["row"] + 1, 0
+        elif tag in ("td", "th"):
+            try:
+                span = max(1, int(dict(attrs).get("colspan") or 1))
+            except ValueError:
+                span = 1
+            row = max(0, t["row"])
+            self.cell = (t["id"], row, t["col"], span, tag == "th" or t["head"])
+            t["col"] += span
 
     def handle_starttag(self, tag, attrs):
         if tag in self.SKIP:
@@ -269,8 +300,18 @@ class _HTMLText(HTMLParser):
         elif tag in ("h1", "h2", "h3", "h4"):
             self._flush()
             self.heading = min(int(tag[1]), 3)
-        elif tag in self.BLOCK:
+        elif tag in self.BLOCK or tag in ("table", "thead", "tbody", "tfoot"):
             self._flush()
+        if not self.skip and tag in (
+            "table",
+            "thead",
+            "tbody",
+            "tfoot",
+            "tr",
+            "td",
+            "th",
+        ):
+            self._table_tag(tag, attrs)
         if tag == "a":
             href = dict(attrs).get("href")
             if href:
@@ -284,14 +325,100 @@ class _HTMLText(HTMLParser):
         elif tag in ("h1", "h2", "h3", "h4"):
             self._flush()
             self.heading = 0
-        elif tag in self.BLOCK:
+        elif tag in self.BLOCK or tag == "table":
             self._flush()
+        if not self.skip and tag in ("td", "th", "table"):
+            self.cell = None
+            if tag == "table" and self.tables:
+                self.tables.pop()
 
     def handle_data(self, data):
         if self._in_title:
             self.title += data
         elif not self.skip and data.strip():
             self.buf.append(data.strip())
+
+
+@dataclass
+class Table:
+    """One HTML table: its header cells by column and its body rows as (column, span, text)."""
+
+    header: dict[int, str]
+    rows: list[list[tuple[int, int, str]]]
+
+
+_SERIAL = re.compile(
+    r"^(s\.?\s*l?\.?\s*no\.?|sr\.?\s*no\.?|serial( no\.?)?|no\.|#)$", re.I
+)
+
+
+def tables(blocks: list[Block]) -> list[tuple[int, Table]]:
+    """(index of the table's first block, table) for every table among the blocks. The first row
+    is the header when it sits in <thead> or is made of <th> cells."""
+    out: list[tuple[int, Table]] = []
+    i = 0
+    while i < len(blocks):
+        if blocks[i].cell is None:
+            i += 1
+            continue
+        tid, start = blocks[i].cell[0], i
+        cells: dict[tuple[int, int], list] = {}
+        while i < len(blocks) and blocks[i].cell and blocks[i].cell[0] == tid:
+            _, row, col, span, head = blocks[i].cell
+            c = cells.setdefault((row, col), [span, head, []])
+            c[2].append(blocks[i].text)
+            i += 1
+        by_row: dict[int, list] = {}
+        for (row, col), (span, head, texts) in sorted(cells.items()):
+            by_row.setdefault(row, []).append((col, span, head, " ".join(texts)))
+        rows = [by_row[r] for r in sorted(by_row)]
+        header: dict[int, str] = {}
+        if rows and all(c[2] for c in rows[0]):
+            header = {col: text for col, _, _, text in rows[0]}
+            rows = rows[1:]
+        out.append(
+            (start, Table(header, [[(c[0], c[1], c[3]) for c in r] for r in rows]))
+        )
+    return out
+
+
+def row_text(table: Table, row: list[tuple[int, int, str]]) -> str:
+    """'Code: MTB101A; Course Title: Engineering Mathematics 1; Total Credits: 4'. A cell spanning
+    several columns ("Total") has no single heading, so it is written as it is; serial numbers
+    are left out."""
+    parts = []
+    for col, span, text in row:
+        head = table.header.get(col, "")
+        if not text or (span == 1 and head and _SERIAL.match(head.strip())):
+            continue
+        parts.append(f"{head}: {text}" if head and span == 1 else text)
+    return "; ".join(parts)
+
+
+def table_rows(blocks: list[Block]) -> list[Block]:
+    """The blocks with every table rewritten as one block per row, each value next to its column
+    heading, so a chunk keeps "Total Credits: 4" together instead of a run of loose numbers."""
+    found = dict(tables(blocks))
+    out: list[Block] = []
+    i = 0
+    while i < len(blocks):
+        if i not in found:
+            if blocks[i].cell is None:
+                out.append(blocks[i])
+            i += 1
+            continue
+        tid = blocks[i].cell[0]
+        t = found[i]
+        page = blocks[i].page
+        for row in t.rows:
+            text = row_text(t, row)
+            if text:
+                out.append(Block(text, page=page))
+        if t.header and not t.rows:  # a heading row on its own is still text
+            out.append(Block(" | ".join(t.header.values()), page=page))
+        while i < len(blocks) and blocks[i].cell and blocks[i].cell[0] == tid:
+            i += 1
+    return out
 
 
 def parse_html(text: str) -> tuple[list[Block], str, list[str]]:
@@ -325,7 +452,7 @@ def parse(filename: str, data: bytes) -> list[Block]:
     elif mime == "text/csv":
         blocks = _rows(list(csv.reader(io.StringIO(_decode(data)))))
     elif mime == "text/html":
-        blocks = parse_html(_decode(data))[0]
+        blocks = table_rows(parse_html(_decode(data))[0])
     else:
         blocks = _plain(_decode(data), markdown=mime == "text/markdown")
     if not any(b.level == 0 and b.text for b in blocks):

@@ -19,6 +19,7 @@ python -m experience_api.messaging run [--every 15]   # overdue callbacks, weekl
 from __future__ import annotations
 
 import argparse
+import logging
 import smtplib
 import ssl
 import sys
@@ -32,6 +33,8 @@ import psycopg
 from .config import Settings
 from .db import Context, Jsonb, audit, tx
 from .webhooks import GIVE_UP_AFTER, _backoff
+
+log = logging.getLogger("admitai.messaging")
 
 
 class NotConfigured(RuntimeError):
@@ -138,6 +141,81 @@ def staff_reply_whatsapp(lead: dict | None) -> str | None:
     return lead.get("phone")
 
 
+def staff_reply_sms(lead: dict | None) -> str | None:
+    """A staff member chose to answer by SMS: the adult's own mobile number. A minor's guardian
+    agreed to be contacted by e-mail or WhatsApp, not SMS, so a minor gets none."""
+    if not lead or lead.get("is_minor"):
+        return None
+    return lead.get("phone")
+
+
+SMS_MAX = 459  # three SMS segments of 153 characters
+
+
+def sms_text(body: str) -> str:
+    return body if len(body) <= SMS_MAX else body[: SMS_MAX - 1].rstrip() + "…"
+
+
+def sms_configured(settings: Settings) -> bool:
+    return bool(settings.sms_api_url and settings.sms_api_key)
+
+
+def http_sms_send(settings: Settings, to: str, text: str) -> None:
+    """One SMS through the provider. Raises httpx.HTTPError on failure."""
+    import httpx
+
+    r = httpx.post(
+        settings.sms_api_url,
+        json={"to": to, "from": settings.sms_sender or None, "text": text},
+        headers={"Authorization": f"Bearer {settings.sms_api_key}"},
+        timeout=10,
+    )
+    r.raise_for_status()
+
+
+SEND_SMS = http_sms_send  # tests replace this
+
+
+def deliver_sms(settings: Settings, tenant_id: UUID, limit: int = 50) -> dict:
+    """Send queued SMS (PRD F3.6). Failures are retried with backoff for 24 hours, like e-mail;
+    sent rows forget the number and the text."""
+    import httpx
+
+    counts = {"sent": 0, "retry": 0, "failed": 0}
+    with tx(settings.database_url, Context(tenant_id, "system")) as cur:
+        cur.execute(
+            "select * from app.message_outbox where status = 'pending' and channel = 'sms'"
+            " and next_attempt_at <= now() order by id limit %s for update skip locked",
+            (limit,),
+        )
+        for m in cur.fetchall():
+            try:
+                SEND_SMS(settings, m["destination"], sms_text(m["body"] or ""))
+            except httpx.HTTPError as exc:
+                attempts = m["attempts"] + 1
+                expired = datetime.now(timezone.utc) - m["created_at"] > GIVE_UP_AFTER
+                cur.execute(
+                    "update app.message_outbox set status = %s, attempts = %s, last_error = %s,"
+                    " next_attempt_at = now() + %s where id = %s",
+                    (
+                        "failed" if expired else "pending",
+                        attempts,
+                        f"SMS provider: {exc.__class__.__name__}"[:300],
+                        _backoff(attempts),
+                        m["id"],
+                    ),
+                )
+                counts["failed" if expired else "retry"] += 1
+                continue
+            cur.execute(
+                "update app.message_outbox set status = 'sent', sent_at = now(), attempts = attempts + 1,"
+                " destination = null, body = null, last_error = null where id = %s",
+                (m["id"],),
+            )
+            counts["sent"] += 1
+    return counts
+
+
 # Module B's message kinds for each template (POST /channels/whatsapp/notify).
 WHATSAPP_KIND = {
     "callback_ack": "callback_ack",
@@ -157,7 +235,8 @@ def staff_addresses(cur, audience: str) -> list[str]:
     if audience.startswith("faculty:"):
         cur.execute(
             "select p.email from app.profiles p join app.profile_departments d on d.profile_id = p.id"
-            " where p.is_active and p.role = 'faculty' and d.department = %s order by p.email",
+            " where p.is_active and app.policy_role(p.role) = 'faculty' and d.department = %s"
+            " order by p.email",
             (audience.split(":", 1)[1],),
         )
     elif audience == "approvers":
@@ -167,9 +246,11 @@ def staff_addresses(cur, audience: str) -> list[str]:
             " and role in ('college_admin', 'admission_officer') order by email"
         )
     else:
+        # the admission audience is the whole admission desk (officers and counsellors)
         role = "admission_officer" if audience == "admission" else "college_admin"
         cur.execute(
-            "select email from app.profiles where is_active and role = %s order by email",
+            "select email from app.profiles where is_active and app.policy_role(role) = %s"
+            " order by email",
             (role,),
         )
     found = [r["email"] for r in cur.fetchall()]
@@ -465,8 +546,20 @@ def weekly_digest(settings: Settings, tenant_id: UUID) -> str | None:
         return "nothing"
 
 
+def _step(out: dict, name: str, fn, *args):
+    """Run one step on its own: a failure is logged and reported in the run's result, and the
+    other steps still run. One misconfigured channel (a wrong push key, an SMS provider that is
+    down) must not stop callback e-mails and WhatsApp messages for every college."""
+    try:
+        return fn(*args)
+    except Exception as exc:  # noqa: BLE001 - isolate every step
+        log.exception("messaging step %s failed", name)
+        out.setdefault("errors", {})[name] = exc.__class__.__name__
+        return None
+
+
 def run_once(settings: Settings) -> dict:
-    with psycopg.connect(settings.admin_database_url) as conn:
+    with psycopg.connect(settings.worker_database_url) as conn:
         tenants = [
             r[0]
             for r in conn.execute(
@@ -476,24 +569,38 @@ def run_once(settings: Settings) -> dict:
         waiting = conn.execute(
             "select count(*) from app.message_outbox where status = 'pending' and channel = 'email'"
         ).fetchone()[0]
+    from . import webpush
+    from .routes.platform import finish_launches  # the route modules import this one
+
     out: dict = {}
+    pushed = _step(out, "push", webpush.deliver, settings)
+    if pushed:
+        out["push"] = pushed
+    launched = _step(out, "launches", finish_launches, settings)
+    if launched:
+        out["launched"] = launched
     for t in tenants:
-        n = escalate_overdue(settings, t)
+        mine = lambda: out.setdefault(str(t), {})  # noqa: E731
+        n = _step(out, f"{t}:escalate", escalate_overdue, settings, t)
         if n:
-            out.setdefault(str(t), {})["escalated"] = n
-        if weekly_digest(settings, t) == "queued":
-            out.setdefault(str(t), {})["digest"] = "queued"
+            mine()["escalated"] = n
+        if _step(out, f"{t}:digest", weekly_digest, settings, t) == "queued":
+            mine()["digest"] = "queued"
         if settings.key_to_assistant:
-            wa = deliver_whatsapp(settings, t)
-            if any(wa.values()):
-                out.setdefault(str(t), {})["whatsapp"] = wa
+            wa = _step(out, f"{t}:whatsapp", deliver_whatsapp, settings, t)
+            if wa and any(wa.values()):
+                mine()["whatsapp"] = wa
+        if sms_configured(settings):
+            sms = _step(out, f"{t}:sms", deliver_sms, settings, t)
+            if sms and any(sms.values()):
+                mine()["sms"] = sms
     if not email_configured(settings):
         if waiting:
             out["waiting_for_smtp"] = waiting
         return out
     for t in tenants:
-        done = deliver(settings, t)
-        if any(done.values()):
+        done = _step(out, f"{t}:email", deliver, settings, t)
+        if done and any(done.values()):
             out.setdefault(str(t), {}).update(done)
     return out
 
@@ -506,10 +613,14 @@ if __name__ == "__main__":
     )
     a = ap.parse_args()
     s = Settings()
-    if not (s.database_url and s.admin_database_url):
+    if not (s.database_url and s.worker_database_url):
         sys.exit("Set DATABASE_URL and ADMIN_DATABASE_URL (source local.env.sh)")
     while True:
-        done = run_once(s)
+        try:
+            done = run_once(s)
+        except psycopg.Error:  # the database is down or restarting: try again next time
+            log.exception("messaging run failed")
+            done = {"errors": {"run": "database unavailable"}}
         if done:
             print(done, flush=True)
         if not a.every:

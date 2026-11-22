@@ -1,0 +1,225 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AdmitAI events from Module C to Module A (PRD 21.4)",
+  "description": "Delivered at least once to POST /events on Module A; de-duplicated by (tenant_id, event_id).",
+  "type": "object",
+  "required": [
+    "event_id",
+    "type",
+    "tenant_id",
+    "data"
+  ],
+  "properties": {
+    "event_id": {
+      "type": [
+        "integer",
+        "string"
+      ]
+    },
+    "type": {
+      "enum": [
+        "feedback.created",
+        "correction.submitted",
+        "erasure.requested",
+        "signal.logged"
+      ]
+    },
+    "tenant_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "data": {
+      "oneOf": [
+        {
+          "title": "feedback.created",
+          "type": "object",
+          "required": [
+            "conversation_id",
+            "message_id",
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "feedback_id": {
+              "type": "string"
+            },
+            "conversation_id": {
+              "type": "string"
+            },
+            "message_id": {
+              "type": "string",
+              "description": "Module B's message id, or 'conversation'"
+            },
+            "kind": {
+              "enum": [
+                "thumb",
+                "rating"
+              ]
+            },
+            "value": {
+              "type": "integer"
+            },
+            "reason": {
+              "enum": [
+                "wrong",
+                "outdated",
+                "incomplete",
+                "not_what_i_asked",
+                "hard_to_understand",
+                "other",
+                null
+              ]
+            },
+            "comment": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "trace_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "channel": {
+              "enum": [
+                "web_chat",
+                "whatsapp",
+                "web_voice"
+              ]
+            },
+            "department": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "actor": {
+              "enum": [
+                "visitor",
+                "staff"
+              ]
+            }
+          }
+        },
+        {
+          "title": "correction.submitted",
+          "type": "object",
+          "required": [
+            "correction_id",
+            "corrected_answer"
+          ],
+          "properties": {
+            "correction_id": {
+              "type": "string"
+            },
+            "conversation_id": {
+              "type": "string"
+            },
+            "message_id": {
+              "type": "string"
+            },
+            "original_answer": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "corrected_answer": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string"
+            },
+            "scope": {
+              "enum": [
+                "this_answer",
+                "general"
+              ]
+            },
+            "trace_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "department": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "departments": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "title": "erasure.requested",
+          "description": "Erasure on request (PRD 11.4). Module C has already blanked its own rows and Module B the transcripts; Module A removes the text of signals, events and proposal examples for these conversations. Repeating it is harmless.",
+          "type": "object",
+          "required": [
+            "session_id",
+            "conversation_ids"
+          ],
+          "properties": {
+            "session_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "conversation_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "title": "signal.logged",
+          "description": "PRD F8.3 implicit signal from the widget. Ids and channel only, never visitor text.",
+          "type": "object",
+          "required": [
+            "kind",
+            "conversation_id"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "rephrase",
+                "talk_to_human",
+                "voice_hangup",
+                "barge_in"
+              ]
+            },
+            "conversation_id": {
+              "type": "string"
+            },
+            "message_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "channel": {
+              "enum": [
+                "web_chat",
+                "whatsapp",
+                "web_voice"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

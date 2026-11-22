@@ -183,7 +183,8 @@ def ping(
 
 class KnowledgeEvent(BaseModel):
     event_id: UUID
-    type: Literal["improvement.deployed", "kb.sync.completed"]
+    # improvement.tested is for the console's bell only, never sent on to the college's endpoints
+    type: Literal["improvement.deployed", "kb.sync.completed", "improvement.tested"]
     data: dict
 
 
@@ -209,7 +210,50 @@ def from_knowledge(
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, "X-Tenant-Id must be a uuid"
         ) from None
+    if body.type == "improvement.tested":
+        # Read as the College Admin of this tenant only, so a repeat delivery is seen and skipped
+        # (notifications are readable by staff roles, not by "system").
+        with tx(settings.database_url, Context(tenant, "college_admin")) as cur:
+            _bell_for_test_result(cur, tenant, body)
+        return {"queued": 0}
     assert body.type in FROM_KNOWLEDGE
     with tx(settings.database_url, Context(tenant, "system")) as cur:
         queued = emit(cur, body.type, body.data, event_id=body.event_id)
     return {"queued": queued}
+
+
+def _bell_for_test_result(cur, tenant: UUID, body: KnowledgeEvent) -> None:
+    """An approved change finished its test: the approvers of its area (and the College Admin)
+    see it in the bell. Once per event, however often Module A sends it."""
+    d = body.data
+    dept = d.get("department")
+    cur.execute(
+        "insert into app.notifications (tenant_id, audience, kind, payload)"
+        " select %s, %s, 'improvement.tested', %s where not exists (select 1 from"
+        " app.notifications where kind = 'improvement.tested' and payload->>'event_id' = %s)",
+        (
+            tenant,
+            f"faculty:{dept}" if dept else "admission",
+            Jsonb(
+                {
+                    "event_id": str(body.event_id),
+                    "proposal_id": d.get("proposal_id"),
+                    "title": (d.get("title") or "")[:200],
+                    "passed": bool(d.get("passed")),
+                    "taken_down": bool(d.get("taken_down")),
+                    # the first reason, or what changed for visitors
+                    "reason": (d.get("reasons") or [""])[0][:200]
+                    if not d.get("passed")
+                    else _fee_line(d.get("fee_changes") or []),
+                }
+            ),
+            str(body.event_id),
+        ),
+    )
+
+
+def _fee_line(changes: list[dict]) -> str:
+    return "; ".join(
+        f"{c.get('program')}, {c.get('component')}: {c.get('old')} → {c.get('new')}"
+        for c in changes
+    )[:200]

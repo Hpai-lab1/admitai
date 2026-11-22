@@ -49,6 +49,13 @@ class AssistantClient:
                 f"Assistant service: {exc.__class__.__name__}"
             ) from exc
 
+    def load(self, tenant: str) -> dict:
+        """How many visitor answers Module B is writing now, for any college (the gate waits
+        while any are). Module B's service calls name a tenant; the count is not per tenant."""
+        r = self.client.get(f"{self.base}/load", headers=self._h(tenant), timeout=3)
+        r.raise_for_status()
+        return r.json()
+
     def message(self, tenant: str, message_id: str) -> dict | None:
         r = self._get(f"/messages/{message_id}", tenant)
         if r.status_code == 404:
@@ -127,6 +134,12 @@ class AssistantClient:
                 ) from exc
             out.update(r.json()["items"])
         return out
+
+    def versions(self, tenant: str) -> dict:
+        """Module B's code, agent and prompt versions: if any changes, answers may change."""
+        r = self._get("/health", tenant)
+        r.raise_for_status()
+        return {k: r.json().get(k) for k in ("version", "agent", "prompt")}
 
     def get_settings(self, tenant: str) -> dict:
         r = self._get("/tenant-settings", tenant)

@@ -17,8 +17,15 @@ const config: Config = {
         muted: "rgb(var(--c-muted) / <alpha-value>)",
         line: "rgb(var(--c-line) / <alpha-value>)",
         subtle: "rgb(var(--c-subtle) / <alpha-value>)",
+        // status text that keeps 4.5:1 in light and dark (globals.css)
+        danger: "rgb(var(--c-danger) / <alpha-value>)",
+        warn: "rgb(var(--c-warn) / <alpha-value>)",
+        ok: "rgb(var(--c-ok) / <alpha-value>)",
       },
-      fontFamily: { brand: ["var(--brand-font)", "system-ui", "sans-serif"] },
+      fontFamily: {
+        brand: ["var(--brand-font)", "system-ui", "sans-serif"],
+        display: ["var(--font-display)", "Georgia", "serif"],
+      },
       borderRadius: { btn: "0.7em" },
     },
   },

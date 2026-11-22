@@ -1,0 +1,35 @@
+# Tenant Pack: a synthetic commerce college, used to prove zero-code onboarding (PRD G4).
+# Nothing here is real. The staff e-mails use the reserved .example domain.
+version: 1
+college:
+  slug: riverside
+  name: Riverside College of Commerce and Management
+  academic_year: 2027-28
+branding:
+  assistant_name: Riverside Admissions Helper
+  greeting: Welcome to Riverside! Ask me about B.Com, BBA or MBA admissions.
+  primary_color: "#0F6E5A"
+persona:
+  tone: friendly and direct; avoid jargon
+languages: [en, hi]
+starter_questions:
+  - What is the BBA fee?
+  - Who can apply for the MBA?
+  - When do classes start?
+departments: [Commerce, Management]
+sensitive_topics: [refund, reservation, quota, complaint, grievance, ragging, harassment]
+escalation:
+  confidence_below: 0.55
+office_hours: Mon-Fri 10:00-16:00
+response_time_hours: 48
+launch:
+  # The PRD asks for 150 real questions from the college's own enquiries before a real launch;
+  # this synthetic pack has 20, so its own minimum is set to 20 and the checklist says so.
+  min_test_questions: 20
+  min_accuracy: 0.85
+  min_refusal: 0.9
+staff:
+  - { email: principal@riverside.example, name: Principal Rao, role: college_admin }
+  - { email: admissions@riverside.example, name: Admissions Desk, role: admission_officer }
+  - { email: commerce@riverside.example, name: Dr Commerce, role: faculty, departments: [Commerce] }
+  - { email: management@riverside.example, name: Dr Management, role: faculty, departments: [Management] }

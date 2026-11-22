@@ -47,7 +47,9 @@ def test_pack_imports_and_reports_readiness(lclient, tenant):
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["college"]["slug"] == "demo-college"
-    assert body["loaded"]["documents"] == 5 and body["loaded"]["eval_cases"] == 25
+    assert (
+        body["loaded"]["documents"] == 5 and body["loaded"]["eval_cases"] == 26
+    )  # d26: no eligibility verdicts
     items = {i["key"]: i for i in body["readiness"]}
     assert (
         items["fees"]["ok"]
@@ -148,7 +150,7 @@ def test_launch_run_reports_its_verdict(lclient, assistant, tenant):
     critical = sum(
         c["critical"] for c in cases
     )  # pack cases + catalogue tuition-fee cases
-    assert critical == 14
+    assert critical == 15  # d26 is critical
     assert (
         got["status"] == "done"
         and "passed" in got

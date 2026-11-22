@@ -38,6 +38,12 @@ class Settings:
     admin_database_url: str = field(
         default_factory=lambda: os.environ.get("ADMIN_DATABASE_URL", "")
     )
+    # Background jobs connect as the module's worker role (not superuser; BYPASSRLS, rights only in
+    # this module's schemas). Unset: the admin connection, as before (migrations still use that).
+    worker_database_url: str = field(
+        default_factory=lambda: os.environ.get("WORKER_DATABASE_URL", "")
+        or os.environ.get("ADMIN_DATABASE_URL", "")
+    )
     # "development" turns on DEV_* conveniences; anything else is treated as production, so a
     # server that forgets the variable is safe by default.
     app_env: str = field(
@@ -89,6 +95,10 @@ class Settings:
     web_origin: str = field(
         default_factory=lambda: os.environ.get("WEB_ORIGIN", "http://127.0.0.1:8210")
     )
+    # How often undelivered events are sent to Module A again (seconds; 0 = off).
+    outbox_retry_s: float = field(
+        default_factory=lambda: float(os.environ.get("OUTBOX_RETRY_S") or 60)
+    )
     # Development only: return guardian codes in the API response instead of sending them.
     dev_echo_codes: bool = field(
         default_factory=lambda: os.environ.get("DEV_ECHO_CODES", "") == "1" and _dev()
@@ -100,6 +110,12 @@ class Settings:
     )
     # E-mail through the college's SMTP server or a free-tier service (PRD 15). Unset: nothing is
     # e-mailed, messages wait in app.message_outbox, and guardian codes by e-mail are refused.
+    # PRD 11.4: retention sweeps (leads, consents, audit) every this many hours, from the running
+    # service. 0 (the code default, so test apps start no thread) turns it off; local.env.sh and
+    # the server set 24. Seen 18 Nov 2026: the sweeps existed but nothing ever ran them.
+    retention_sweep_hours: float = field(
+        default_factory=lambda: float(os.environ.get("RETENTION_SWEEP_HOURS", "0"))
+    )
     smtp_host: str = field(default_factory=lambda: os.environ.get("SMTP_HOST", ""))
     smtp_port: int = field(
         default_factory=lambda: int(os.environ.get("SMTP_PORT", "587"))
@@ -112,6 +128,22 @@ class Settings:
     # STARTTLS unless SMTP_STARTTLS=0 (only for a local test relay).
     smtp_starttls: bool = field(
         default_factory=lambda: os.environ.get("SMTP_STARTTLS", "1") != "0"
+    )
+    # SMS (PRD F3.6) through any provider with a JSON HTTP API: POST {to, from, text} with a
+    # bearer key. Unset: SMS waits in app.message_outbox, as e-mail does without SMTP.
+    sms_api_url: str = field(default_factory=lambda: os.environ.get("SMS_API_URL", ""))
+    sms_api_key: str = field(default_factory=lambda: os.environ.get("SMS_API_KEY", ""))
+    sms_sender: str = field(default_factory=lambda: os.environ.get("SMS_SENDER", ""))
+    # Browser push for staff (PRD F7.5): a VAPID key (EC P-256, PEM) and a contact for the push
+    # services. Unset: no push; in-console notifications and e-mail still work. Make a key with
+    #   openssl ecparam -name prime256v1 -genkey -noout -out vapid.pem
+    vapid_private_key_file: str = field(
+        default_factory=lambda: os.environ.get("VAPID_PRIVATE_KEY_FILE", "")
+    )
+    vapid_subject: str = field(
+        default_factory=lambda: os.environ.get(
+            "VAPID_SUBJECT", "mailto:admissions@example.com"
+        )
     )
     access_minutes: int = 15  # PRD 5.4
     refresh_days: int = 7  # PRD 5.4

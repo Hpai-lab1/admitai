@@ -106,6 +106,7 @@ def crawl(
                 ):
                     seen.add(nxt)
                     queue.append((nxt, depth + 1))
+        blocks = ingest.table_rows(blocks)  # a table row stays with its column headings
         if not any(b.level == 0 for b in blocks):
             continue
         data = ingest.full_text(blocks).encode()

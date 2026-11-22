@@ -1,0 +1,47 @@
+# Tenant Pack (PRD F10.1). Synthetic demo college; nothing here is real.
+version: 1
+college:
+  slug: demo-college
+  name: Demo College of Engineering
+  public_key: pk_demo_college_0001
+  academic_year: 2027-28
+branding:
+  assistant_name: Admissions Assistant
+  greeting: Hello! Ask me about courses, fees, hostels or how to apply.
+  primary_color: "#E34A21"
+persona:
+  tone: warm, clear and concise; explain terms for parents
+languages: [en, hi, kn]
+starter_questions:
+  - What is the fee for B.Tech CSE?
+  - Is there a hostel?
+  - What is the last date to apply?
+# The widget's own texts in other languages (Kannada and Hindi visitors). Written without a native
+# speaker: have them reviewed before real use. Left-out texts are not shown in that language.
+translations:
+  kn:
+    assistant_name: ಪ್ರವೇಶ ಸಹಾಯಕ
+    greeting: ನಮಸ್ಕಾರ! ಕೋರ್ಸ್‌ಗಳ ಶುಲ್ಕ, ಅವಧಿ ಮತ್ತು ಪ್ರವೇಶ ದಿನಾಂಕಗಳ ಬಗ್ಗೆ ಕೇಳಿ. ಬೇರೆ ಪ್ರಶ್ನೆಗಳಿಗೆ ನಮ್ಮ ಪ್ರವೇಶ ತಂಡ ಸಹಾಯ ಮಾಡುತ್ತದೆ.
+    starter_questions:
+      - ಬಿ.ಟೆಕ್ ಸಿಎಸ್‌ಇ ಶುಲ್ಕ ಎಷ್ಟು?
+      - ಹಾಸ್ಟೆಲ್ ಶುಲ್ಕ ಎಷ್ಟು?
+      - ಅರ್ಜಿ ಸಲ್ಲಿಸಲು ಕೊನೆಯ ದಿನಾಂಕ ಯಾವುದು?
+      - ಎಂ.ಟೆಕ್ ಕೋರ್ಸ್‌ನ ಅವಧಿ ಎಷ್ಟು?
+  hi:
+    assistant_name: प्रवेश सहायक
+    greeting: नमस्ते! कोर्स की फीस, अवधि और प्रवेश की तिथियों के बारे में पूछिए। बाकी प्रश्नों में हमारी प्रवेश टीम मदद करेगी।
+    starter_questions:
+      - बी.टेक सीएसई की फीस कितनी है?
+      - हॉस्टल की फीस कितनी है?
+      - आवेदन की अंतिम तिथि क्या है?
+      - एम.टेक की अवधि कितनी है?
+departments: [Computer Science, Mechanical, Civil, Management]
+sensitive_topics: [refund, reservation, quota, complaint, grievance, ragging, harassment, caste certificate]
+escalation:
+  confidence_below: 0.55
+  default_queue: admission
+office_hours: Mon-Sat 09:00-17:00
+response_time_hours: 24
+model_policy: { primary: local/qwen2.5-14b-instruct, fallback: local/llama3.1-8b, external: none }
+# WhatsApp Business Platform: the phone_number_id Meta assigns to the college's business number (a test id here).
+whatsapp: { phone_number_id: "demo-test-pnid-0001" }

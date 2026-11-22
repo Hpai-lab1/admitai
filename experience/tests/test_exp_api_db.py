@@ -38,10 +38,13 @@ def settings():
         Settings(),
         database_url=TEST_URL,
         admin_database_url=TEST_ADMIN_URL,
+        # never the real database: local.env.sh points the worker URL there
+        worker_database_url=TEST_ADMIN_URL,
         jwt_secret="test-secret-" + "y" * 40,
         service_key="test-service-key-0123456789",
         knowledge_api_url="http://127.0.0.1:9/a",  # nothing listens: delivery fails and stays queued
         dev_echo_codes=True,
+        retention_sweep_hours=0,  # local.env.sh sets 24; test apps start no sweep thread
     )
 
 
@@ -103,6 +106,103 @@ def consent(client, h, purpose="contact"):
 
 
 # ------------------------------------------------------------------ sign-in
+def test_repeated_failed_sign_ins_are_slowed_down(client):
+    def bad(email="officer@example.com"):
+        return client.post(
+            "/auth/login",
+            json={
+                "tenant": "demo-college",
+                "email": email,
+                "password": "wrong-password",
+            },
+        )
+
+    assert all(bad().status_code == 401 for _ in range(10))
+    blocked = bad()
+    assert blocked.status_code == 429 and int(blocked.headers["Retry-After"]) > 0
+    # Even the right password waits, or guessing could continue; other people are not affected.
+    assert (
+        client.post(
+            "/auth/login",
+            json={
+                "tenant": "demo-college",
+                "email": "officer@example.com",
+                "password": PASSWORD,
+            },
+        ).status_code
+        == 429
+    )
+    login(client, "cs.faculty@example.com")
+    _clear_rate_limits()
+
+
+def _clear_rate_limits():
+    with psycopg.connect(TEST_ADMIN_URL) as conn:
+        conn.execute("delete from app.rate_hits")
+
+
+def test_limits_are_shared_by_every_api_process(client, settings):
+    """With counts in each process, N processes gave a guesser N times the attempts."""
+    from fastapi.testclient import TestClient
+
+    from experience_api.deps import settings_dep
+    from experience_api.main import create_app
+
+    second = create_app(settings)
+    second.dependency_overrides[settings_dep] = lambda: settings
+    other = TestClient(second)
+    body = {
+        "tenant": "demo-college",
+        "email": "mech.faculty@example.com",
+        "password": "nope",
+    }
+    for i in range(10):
+        assert (client if i % 2 else other).post(
+            "/auth/login", json=body
+        ).status_code == 401
+    assert client.post("/auth/login", json=body).status_code == 429
+    assert other.post("/auth/login", json=body).status_code == 429
+    # Stored as HMACs: no e-mail or address is readable, and the API role cannot read the rows.
+    with psycopg.connect(TEST_ADMIN_URL) as conn:
+        keys = [r[0] for r in conn.execute("select key from app.rate_hits")]
+    assert keys and not any("@" in k or "testclient" in k for k in keys)
+    with psycopg.connect(TEST_URL) as conn:
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            conn.execute("select count(*) from app.rate_hits")
+    _clear_rate_limits()
+
+
+def test_every_app_table_has_row_level_security():
+    with psycopg.connect(TEST_ADMIN_URL) as conn:
+        missing = conn.execute(
+            "select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace"
+            " where n.nspname = 'app' and c.relkind = 'r' and not c.relrowsecurity"
+            " and c.relname <> 'schema_migrations'"  # bookkeeping, no college data
+        ).fetchall()
+    assert missing == []
+
+
+def test_wrong_two_factor_codes_are_limited(client):
+    body = client.post(
+        "/auth/login",
+        json={
+            "tenant": "demo-college",
+            "email": "admin@example.com",
+            "password": PASSWORD,
+        },
+    ).json()
+    if body["status"] == "ok":
+        pytest.skip("this admin has no two-factor step here")
+    tries = [
+        client.post(
+            "/auth/mfa", json={"mfa_token": body["mfa_token"], "code": "000000"}
+        ).status_code
+        for _ in range(6)
+    ]
+    assert tries[:5] == [401] * 5 and tries[5] == 429
+    _clear_rate_limits()
+
+
 def test_wrong_password_and_unknown_college(client):
     for tenant, pw in [
         ("demo-college", "Wrong-Password-1"),
@@ -224,12 +324,147 @@ def test_officer_sees_admission_queue_only(client):
     }
 
 
+# ------------------------------------------------------------------ programmes for the website
+def test_the_programme_list_is_public_by_widget_key_and_from_the_knowledge_base(
+    client, monkeypatch
+):
+    from experience_api.routes import programmes
+
+    programmes._cache.clear()
+    seen = {}
+
+    def fake_get(settings, path, tenant, params=None):
+        seen["path"], seen["params"] = path, params
+        return {
+            "items": [
+                {
+                    "code": "BSC-ECON",
+                    "name": "B.Sc. (Hons) in Applied Economics",
+                    "level": "UG",
+                    "department": "School of Social Sciences",
+                    "duration_months": 48,
+                    "intake": 60,
+                    "eligibility": "12th with 50%",
+                    "source_url": "https://college.example/course/econ",
+                    "fees": [
+                        {
+                            "component": "Total fee",
+                            "category": "general",
+                            "amount": "200000.00",
+                            "period": "per year",
+                        },
+                        {
+                            "component": "Total fee",
+                            "category": "nri/other",
+                            "amount": "2000000.00",
+                            "period": "per year",
+                        },
+                    ],
+                }
+            ]
+        }
+
+    monkeypatch.setattr(programmes, "knowledge_get", fake_get)
+    r = client.get("/widget/programmes", params={"public_key": PK})
+    assert r.status_code == 200, r.text
+    assert seen == {"path": "/catalogue/programs", "params": {"facts": "true"}}
+    [p] = r.json()["items"]
+    assert p["title"] == "B.Sc. (Hons) in Applied Economics"
+    assert (p["duration"], p["intake"], p["eligibility"]) == (
+        "4 Years",
+        "60 Seats",
+        True,
+    )
+    assert p["fees"] == [
+        "Total fee: ₹2,00,000 per year",
+        "Total fee (nri/other): ₹20,00,000 per year",
+    ]
+    assert p["url"] == "https://college.example/course/econ"
+    assert (
+        client.get("/widget/programmes", params={"public_key": "pk_nobody"}).status_code
+        == 404
+    )
+
+
 def test_marketing_cannot_open_queue_or_admin(client):
     mkt, _ = login(client, "marketing@example.com")
     assert client.get("/handoffs", headers=mkt).status_code == 403
     assert client.get("/admin/users", headers=mkt).status_code == 403
     assert client.get("/audit", headers=mkt).status_code == 403
     assert "handoffs" not in client.get("/analytics/overview", headers=mkt).json()
+
+
+# ------------------------------------------------------------------ roles beyond PRD 5.2
+def _new_staff(client, role, departments=(), name=None):
+    """A College Admin creates the account; it signs in with its temporary password."""
+    admin, _ = login(client, "admin@example.com")
+    email = f"{name or role.replace('_', '.')}@example.com"
+    r = client.post(
+        "/admin/users",
+        headers=admin,
+        json={
+            "email": email,
+            "full_name": role.replace("_", " ").title(),
+            "role": role,
+            "departments": list(departments),
+        },
+    )
+    assert r.status_code == 201, r.text
+    h, body = login(client, email, password=r.json()["temporary_password"])
+    assert body["role"] == role
+    return h
+
+
+def test_finance_and_hostel_staff_need_a_department(client):
+    admin, _ = login(client, "admin@example.com")
+    for role in ("finance_officer", "hostel_warden"):
+        r = client.post(
+            "/admin/users",
+            headers=admin,
+            json={
+                "email": f"no.dept.{role}@example.com",
+                "full_name": "X",
+                "role": role,
+            },
+        )
+        assert r.status_code == 422, r.text
+
+
+def test_counsellor_works_the_admission_queue_but_approves_nothing(client):
+    h = _new_staff(client, "admission_counsellor")
+    items = client.get("/handoffs", headers=h).json()
+    assert items and {i["queue"] for i in items} == {"admission"}
+    assert client.get("/leads", headers=h).status_code == 200
+    assert client.get("/approvals", headers=h).status_code == 403
+    assert client.get("/admin/users", headers=h).status_code == 403
+    # reading the knowledge base is allowed (Module A is not running here: 502, not 403)
+    assert client.get("/kb/documents", headers=h).status_code != 403
+
+
+def test_finance_officer_sees_only_their_departments_queue(client):
+    h = _new_staff(client, "finance_officer", ["Computer Science"])
+    items = client.get("/handoffs", headers=h).json()
+    assert items and {i["department"] for i in items} == {"Computer Science"}
+    # approves for its departments (Module A is not running here: 502, not 403)
+    assert client.get("/approvals", headers=h).status_code != 403
+    assert client.patch(
+        f"/leads/{'0' * 8}-0000-0000-0000-{'0' * 12}", headers=h, json={"stage": "lost"}
+    ).status_code in (403, 422)
+
+
+def test_hostel_warden_does_not_see_other_departments(client):
+    h = _new_staff(client, "hostel_warden", ["Civil"])
+    assert all(
+        i["department"] == "Civil" for i in client.get("/handoffs", headers=h).json()
+    )
+
+
+def test_management_sees_aggregates_only(client):
+    h = _new_staff(client, "management")
+    for path in ("/handoffs", "/leads", "/admin/users", "/approvals", "/audit"):
+        assert client.get(path, headers=h).status_code == 403, path
+    overview = client.get("/analytics/overview", headers=h).json()
+    assert "leads" in overview and "handoffs" not in overview
 
 
 def test_claim_reply_resolve_and_correction(client):
@@ -466,6 +701,36 @@ def test_feedback_goes_to_outbox(client):
     assert row[0] >= 1 and row[1]  # tried once, Module A unreachable, kept for retry
 
 
+def test_feedback_carries_a_session_hash_not_the_session(client):
+    def send(headers, mid):
+        r = client.post(
+            "/feedback",
+            headers=headers,
+            json={
+                "conversation_id": "c1",
+                "message_id": mid,
+                "kind": "thumb",
+                "value": -1,
+            },
+        )
+        assert r.status_code == 201
+        with psycopg.connect(TEST_ADMIN_URL) as conn:
+            return conn.execute(
+                "select payload from app.outbox_events where payload->>'feedback_id' = %s",
+                (r.json()["id"],),
+            ).fetchone()[0]
+
+    a, b = visitor(client), visitor(client)
+    first, again, other = send(a, "m1"), send(a, "m2"), send(b, "m3")
+    assert first["session_fp"] == again["session_fp"] != other["session_fp"]
+    assert len(first["session_fp"]) == 64
+    with psycopg.connect(TEST_ADMIN_URL) as conn:
+        sessions = [
+            str(r[0]) for r in conn.execute("select id from app.visitor_sessions")
+        ]
+    assert not any(sid in str(first) for sid in sessions)
+
+
 def test_audit_log_is_append_only():
     with psycopg.connect(TEST_URL) as conn:
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
@@ -562,6 +827,86 @@ def test_approvals_filtered_by_role(client, monkeypatch):
     assert decided == ["/improvements/p2/approve"]
 
 
+def test_only_the_college_admin_can_publish_a_change_before_it_is_tested(
+    client, monkeypatch
+):
+    from experience_api.routes import approvals
+
+    proposals = [{"id": "p2", "department": "Computer Science", "impact_score": 0.9}]
+    sent = []
+    monkeypatch.setattr(approvals, "knowledge_get", lambda *a: {"items": proposals})
+    monkeypatch.setattr(
+        approvals, "knowledge_post", lambda s, path, t, b: sent.append((path, b)) or {}
+    )
+    urgent = {"ids": ["p2"], "decision": "approve", "publish_now": True}
+    cs, _ = login(client, "cs.faculty@example.com")
+    assert client.post("/approvals/decide", headers=cs, json=urgent).status_code == 403
+    admin, _ = login(client, "admin@example.com")
+    r = client.post(
+        "/approvals/decide", headers=admin, json={**urgent, "decision": "reject"}
+    )
+    assert r.status_code == 403 and not sent  # only an approval can be urgent
+    r = client.post("/approvals/decide", headers=admin, json=urgent)
+    assert r.status_code == 200 and r.json()["results"][0]["ok"]
+    assert sent[0][0] == "/improvements/p2/approve" and sent[0][1]["publish_now"]
+    with psycopg.connect(TEST_ADMIN_URL) as conn:
+        assert (
+            conn.execute(
+                "select count(*) from app.audit_logs where action = 'improvement.publish_now'"
+                " and entity_id = 'p2'"
+            ).fetchone()[0]
+            == 1
+        )
+
+
+def test_a_correction_is_checked_against_the_fee_list(client, monkeypatch):
+    from experience_api.routes import catalogue
+
+    monkeypatch.setattr(
+        catalogue,
+        "knowledge_post",
+        lambda s, path, t, body: {
+            "conflicts": [{"code": "BTECH-CSE", "quoted": ["400000"]}],
+            "fee_changes": [],
+        },
+    )
+    cs, _ = login(client, "cs.faculty@example.com")
+    r = client.post("/catalogue/check", headers=cs, json={"text": "CSE fee 400000"})
+    assert r.json()["conflicts"][0]["quoted"] == ["400000"]
+    # the programme list is read-only; fees change only through approved corrections
+    admin, _ = login(client, "admin@example.com")
+    monkeypatch.setattr(
+        catalogue,
+        "knowledge_get",
+        lambda s, path, t, params: {
+            "items": [
+                {
+                    "id": "p1",
+                    "code": "BTECH-CSE",
+                    "name": "B.Tech CSE",
+                    "level": "UG",
+                    "intake": 360,
+                    "aliases": ["CSE"],
+                    "fees": [{"id": "f1", "amount": "600000", "currency": "INR"}],
+                }
+            ]
+        }
+        if path == "/catalogue/programs" and params == {"facts": "true"}
+        else None,
+    )
+    items = client.get("/catalogue/programs", headers=admin).json()["items"]
+    assert items[0]["code"] == "BTECH-CSE" and items[0]["fees"][0]["amount"] == "600000"
+    assert "aliases" not in items[0]  # only what staff need to read
+    visitor = client.post(
+        "/widget/session", json={"public_key": "pk_demo_college_0001", "utm": {}}
+    )
+    vt = {"Authorization": f"Bearer {visitor.json()['session_token']}"}
+    assert client.get("/catalogue/programs", headers=vt).status_code in (401, 403)
+    assert client.patch(
+        "/catalogue/fees/f1", headers=admin, json={"amount": "1"}
+    ).status_code in (404, 405)
+
+
 def test_approvals_report_upstream_down(client):
     admin, _ = login(client, "admin@example.com")
     assert client.get("/approvals", headers=admin).status_code == 502
@@ -609,6 +954,72 @@ def test_review_queue_is_scoped_by_department(client):
     assert all(
         r["department"] is None for r in client.get("/feedback", headers=officer).json()
     )
+
+
+def test_a_three_star_chat_rating_with_a_complaint_is_reviewed(client):
+    """The widget's dropdown after the stars (19 Nov 2026): 3 stars + "out of date" is a
+    complaint for the review queue; 3 stars and "satisfactory" (no reason) is not."""
+    v = visitor(client)
+    ids = {}
+    for name, reason in (("complaint", "outdated"), ("fine", None)):
+        r = client.post(
+            "/feedback",
+            headers=v,
+            json={
+                "conversation_id": f"rate-{name}",
+                "message_id": "conversation",
+                "kind": "rating",
+                "value": 3,
+                "reason": reason,
+                "comment": "The 2025 fees were shown" if reason else None,
+            },
+        )
+        assert r.status_code == 201, r.text
+        ids[name] = r.json()["id"]
+    admin, _ = login(client, "admin@example.com")
+    queue = {
+        r["id"] for r in client.get("/feedback?only=negative", headers=admin).json()
+    }
+    assert ids["complaint"] in queue and ids["fine"] not in queue
+
+
+def test_super_admin_sees_feedback_without_visitors_words_unless_break_glass(client):
+    """PRD 5.3: platform staff read feedback aggregated (seen 18 Nov 2026: comments readable)."""
+    sa, _ = login(client, "platform@example.com")
+    client.post("/break-glass/end", headers=sa)  # whatever an earlier test left open
+    rows = client.get("/feedback?only=all", headers=sa).json()
+    assert rows and all(r["redacted"] for r in rows)
+    assert all(r["comment"] is None and r["conversation_id"] is None for r in rows)
+    assert {"kind", "value", "reason"} <= set(rows[0])  # what an aggregate needs stays
+    r = client.post(
+        "/break-glass",
+        headers=sa,
+        json={"reason": "Checking a parent's complaint, ticket 12"},
+    )
+    assert r.status_code == 201, r.text
+    rows = client.get("/feedback?only=all", headers=sa).json()
+    assert rows and not any(r.get("redacted") for r in rows)
+    client.post("/break-glass/end", headers=sa)
+
+
+def test_the_admin_is_told_when_e_mail_is_not_set_up(client):
+    """Seen 18 Nov 2026: e-mails waited in the outbox with no SMTP server and nobody knew."""
+    with psycopg.connect(TEST_ADMIN_URL) as conn:
+        tid = conn.execute(
+            "select id from app.tenants where slug = 'demo-college'"
+        ).fetchone()[0]
+        conn.execute(
+            "insert into app.message_outbox (tenant_id, channel, template, destination, subject, body)"
+            " values (%s, 'email', 'callback_ack', 'parent@example.com', 'Callback', 'We will call')",
+            (tid,),
+        )
+    admin, _ = login(client, "admin@example.com")
+    kinds = {i["kind"]: i for i in client.get("/today", headers=admin).json()["items"]}
+    assert (
+        "email_not_set_up" in kinds
+        and kinds["email_not_set_up"]["priority"] == "urgent"
+    )
+    assert client.get("/health").json()["email"].startswith("not configured")
 
 
 def test_handoff_detail_shows_feedback(client):
@@ -986,6 +1397,47 @@ def _upload(client, h, data):
     )
 
 
+def test_a_launch_finishes_without_the_page_open(client, monkeypatch, settings):
+    from experience_api.routes import platform
+
+    def status_of(tid):
+        with psycopg.connect(TEST_ADMIN_URL) as conn:
+            return conn.execute(
+                "select status from app.tenants where id = %s", (tid,)
+            ).fetchone()[0]
+
+    fake = _FakeA(run_passed=False)
+    sa = _platform(client, monkeypatch, fake)
+    t = _upload(client, sa, _pack_zip("nopage")).json()
+    assert (
+        client.post(f"/platform/tenants/{t['id']}/launch", headers=sa).status_code
+        == 202
+    )
+
+    # Failed: stays private, and is not asked about again on every run.
+    assert platform.finish_launches(settings) == []
+    assert status_of(t["id"]) == "onboarding"
+    calls = []
+    real = platform._launch_result
+    monkeypatch.setattr(
+        platform,
+        "_launch_result",
+        lambda *a: calls.append(a) or real(*a),
+    )
+    platform.finish_launches(settings)
+    assert not [c for c in calls if str(c[1]) == t["id"]]
+
+    # A new launch that passes goes live with nobody on the page.
+    fake.run_passed = True
+    assert (
+        client.post(f"/platform/tenants/{t['id']}/launch", headers=sa).status_code
+        == 202
+    )
+    assert platform.finish_launches(settings) == [t["slug"]]
+    assert status_of(t["id"]) == "live"
+    assert platform.finish_launches(settings) == []
+
+
 def test_only_the_super_admin_onboards_colleges(client, monkeypatch):
     _platform(client, monkeypatch, _FakeA())
     admin, _ = login(client, "admin@example.com")
@@ -1267,11 +1719,8 @@ def test_visitor_erasure_clears_c_and_reaches_b_then_a(client, settings, monkeyp
     # Module B did its part and the ids were kept; Module A was down, so it waits for a retry.
     assert payload == {"session_id": sid, "conversation_ids": ["conv-1"]}
     assert not delivered
-    with psycopg.connect(TEST_ADMIN_URL) as conn:
-        tenant_id = conn.execute(
-            "select tenant_id from app.visitor_sessions where id = %s", (sid,)
-        ).fetchone()[0]
-    clients.dispatch_events(settings, tenant_id)
+    # the minute-by-minute retry delivers it without anyone doing anything
+    assert clients.deliver_waiting(settings) >= 1
     ((_, delivered, _),) = _erasure_rows(sid)
     assert delivered
     # Module B was asked once; Module A got the conversation ids it needs.
@@ -1370,7 +1819,7 @@ def test_whatsapp_conversations_count_in_the_dashboard(client, monkeypatch):
     assert c["whatsapp"] == 1 and c["total"] == before["conversations"]["total"] + 1
     assert c["qualifying"] == before["conversations"]["qualifying"] + 1
     assert c["resolved"] == before["conversations"]["resolved"] + 1
-    assert after["assistant"] == {"by_channel": by_channel}
+    assert after["assistant"] == {"by_channel": by_channel, "by_model": []}
 
     # Faculty keep the widget-only, department-scoped view.
     cs, _ = login(client, "cs.faculty@example.com")
@@ -1389,6 +1838,7 @@ def test_starting_chats_is_limited_per_ip_with_retry_after(settings):
     from experience_api.deps import settings_dep
     from experience_api.main import create_app
 
+    _clear_rate_limits()  # counts are shared by every process, so start from none
     s = replace(settings, sessions_per_ip_minute=2)
     app = create_app(s)
     app.dependency_overrides[settings_dep] = lambda: s
@@ -1582,6 +2032,73 @@ def test_module_a_events_are_relayed_once_with_their_key(client, settings):
     assert (
         ok.json()["queued"] >= 1 and again.json()["queued"] == 0
     )  # idempotent by event id
+
+
+def test_a_finished_test_reaches_the_bell_not_the_colleges_webhooks(client, settings):
+    import uuid as _uuid
+    from dataclasses import replace
+
+    from fastapi.testclient import TestClient
+
+    from experience_api.deps import settings_dep
+    from experience_api.main import create_app
+
+    s = replace(settings, key_from_knowledge="key-a-to-c")
+    app = create_app(s)
+    app.dependency_overrides[settings_dep] = lambda: s
+    c = TestClient(app)
+    admin, _ = login(c, "admin@example.com")
+    _hook(c, admin, ["improvement.deployed"])
+    h = {"X-Tenant-Id": _demo_tenant(), "X-Service-Key": "key-a-to-c"}
+    failed = {
+        "event_id": str(_uuid.uuid4()),
+        "type": "improvement.tested",
+        "data": {
+            "proposal_id": "p1",
+            "title": "Expert correction: B.Tech CSE fee",
+            "passed": False,
+            "taken_down": True,
+            "reasons": ["critical case d26 no longer passes"],
+        },
+    }
+    for _ in range(2):  # sent twice, shown once
+        r = c.post("/webhooks/events", json=failed, headers=h)
+        assert r.status_code == 202 and r.json()["queued"] == 0
+    passed = {
+        "event_id": str(_uuid.uuid4()),
+        "type": "improvement.tested",
+        "data": {
+            "proposal_id": "p2",
+            "title": "Expert correction: B.Tech CSE fee",
+            "passed": True,
+            "fee_changes": [
+                {
+                    "program": "B.Tech CSE",
+                    "component": "tuition",
+                    "old": "250000",
+                    "new": "400000",
+                }
+            ],
+        },
+    }
+    c.post("/webhooks/events", json=passed, headers=h)
+    notes = [
+        n
+        for n in c.get("/notifications", headers=admin).json()["items"]
+        if n["kind"] == "improvement.tested"
+    ]
+    by_id = {n["payload"]["proposal_id"]: n["payload"] for n in notes}
+    assert len(notes) == 2
+    assert by_id["p1"]["taken_down"] and "d26" in by_id["p1"]["reason"]
+    assert by_id["p2"]["passed"] and "250000 → 400000" in by_id["p2"]["reason"]
+    with psycopg.connect(TEST_ADMIN_URL) as conn:
+        assert (
+            conn.execute(
+                "select count(*) from app.webhook_deliveries"
+                " where type = 'improvement.tested'"
+            ).fetchone()[0]
+            == 0
+        )
 
 
 def test_a_delivery_is_given_up_after_24_hours(client, settings, monkeypatch):
@@ -2314,6 +2831,40 @@ def test_only_the_college_admin_names_delegates(client, monkeypatch):
     assert calls[0][2]["delegates"] == {"default": "Deputy Registrar"}
 
 
+def test_visitor_sees_who_claimed_their_own_request_only(client):
+    v = visitor(client)
+    consent(client, v)
+    client.post(
+        "/leads", headers=v, json={"name": "Banner Test", "phone": "+15550100088"}
+    )
+    mine = lambda h, c="conv-banner": client.get(  # noqa: E731
+        "/handoffs/mine", params={"conversation_id": c}, headers=h
+    )
+    assert mine(v).json() == {"status": "none"}
+    hid = client.post(
+        "/callbacks",
+        headers=v,
+        json={"conversation_id": "conv-banner", "reason": "Call me"},
+    ).json()["handoff_id"]
+    first = mine(v).json()
+    assert first["status"] == "open" and first["staff_first_name"] is None
+    officer, _ = login(client, "officer@example.com")
+    assert client.post(f"/handoffs/{hid}/claim", headers=officer).status_code == 200
+    claimed = mine(v).json()
+    assert claimed["status"] == "claimed" and claimed["staff_first_name"]
+    assert " " not in claimed["staff_first_name"]
+    # A title is not a name.
+    with psycopg.connect(TEST_ADMIN_URL) as conn:
+        conn.execute(
+            "update app.profiles set full_name = 'Dr. Asha Rao' where email = 'officer@example.com'"
+        )
+    assert mine(v).json()["staff_first_name"] == "Asha"
+    assert mine(v, "x" * 201).status_code == 422
+    # Another visitor knows nothing about it, and staff tokens do not use this route.
+    assert mine(visitor(client)).json() == {"status": "none"}
+    assert mine(officer).status_code in (401, 403)
+
+
 def test_quality_and_topics_dashboards_say_when_module_a_is_down(client, monkeypatch):
     from experience_api.clients import UpstreamError
     from experience_api.routes import analytics
@@ -2326,6 +2877,17 @@ def test_quality_and_topics_dashboards_say_when_module_a_is_down(client, monkeyp
     for path in ("/analytics/quality", "/analytics/topics"):
         r = client.get(path, headers=admin)
         assert r.status_code == 200 and r.json() == {"available": False}
+    monkeypatch.setattr(
+        analytics,
+        "assistant_topics",
+        lambda s, t, since: {
+            "intents": [{"intent": "fees", "current": 5, "previous": 2}],
+            "trending": [{"question": "Is there a bus?", "current": 3, "previous": 1}],
+        },
+    )
+    # Module B's numbers still show when only Module A is down.
+    t = client.get("/analytics/topics", headers=admin).json()
+    assert t["available"] is False and t["intents"][0]["intent"] == "fees"
 
     reports = {
         "/reports/quality": {"weeks": [{"week": "2026-W44", "acceptance_rate": 0.8}]},
@@ -2341,3 +2903,496 @@ def test_quality_and_topics_dashboards_say_when_module_a_is_down(client, monkeyp
     assert q["available"] and q["weeks"][0]["acceptance_rate"] == 0.8
     t = client.get("/analytics/topics", headers=admin).json()
     assert t["unanswered"] == [{"question": "Is there a swimming pool?", "count": 4}]
+    assert t["trending"][0] == {
+        "question": "Is there a bus?",
+        "current": 3,
+        "previous": 1,
+    }
+
+
+# ------------------------------------------------------------------ console home (PRD 13)
+def test_today_lists_what_needs_each_person_most_urgent_first(client, monkeypatch):
+    from experience_api.routes import approvals
+
+    officer, _ = login(client, "officer@example.com")
+    queue = client.get("/handoffs", headers=officer).json()
+    assert queue
+    with psycopg.connect(
+        TEST_ADMIN_URL
+    ) as conn:  # one request is past its promised time
+        conn.execute(
+            "update app.handoffs set sla_due_at = now() - interval '1 hour' where id = %s",
+            (queue[0]["id"],),
+        )
+    queue = client.get("/handoffs", headers=officer).json()
+
+    def by_kind(h):
+        return {i["kind"]: i for i in client.get("/today", headers=h).json()["items"]}
+
+    # Module A is unreachable in tests: approvals are reported as unavailable, never as zero.
+    items = by_kind(officer)
+    assert items["approvals"]["count"] is None
+    assert "could not be loaded" in items["approvals"]["title"]
+    # Each count is what its page shows.
+    assert items["overdue_callbacks"]["count"] == sum(h["overdue"] for h in queue)
+    waiting = sum(h["status"] == "open" for h in queue)
+    assert items.get("waiting_callbacks", {}).get("count", 0) == waiting
+    hot = client.get("/leads?band=hot&stage=new", headers=officer).json()["total"]
+    assert items.get("hot_leads", {}).get("count", 0) == hot
+    ranked = client.get("/today", headers=officer).json()["items"]
+    assert (
+        ranked[0]["kind"] == "overdue_callbacks" and ranked[0]["priority"] == "urgent"
+    )
+    assert (
+        "past their promised time" in ranked[0]["title"]
+        or "past its" in ranked[0]["title"]
+    )
+
+    # Faculty count only their department; approvals only theirs.
+    monkeypatch.setattr(
+        approvals,
+        "knowledge_get",
+        lambda *a: {
+            "items": [
+                {"id": "p1", "department": None},
+                {"id": "p2", "department": "Computer Science"},
+            ]
+        },
+    )
+    cs, _ = login(client, "cs.faculty@example.com")
+    cs_items = by_kind(cs)
+    assert cs_items["approvals"]["count"] == 1
+    assert cs_items["approvals"]["title"].startswith("1 change ")
+    cs_queue = client.get("/handoffs", headers=cs).json()
+    assert cs_items.get("overdue_callbacks", {}).get("count", 0) == sum(
+        h["overdue"] for h in cs_queue
+    )
+    assert "hot_leads" not in cs_items
+
+    # Marketing: leads only, no queue and no approvals.
+    mkt, _ = login(client, "marketing@example.com")
+    assert set(by_kind(mkt)) <= {"hot_leads"}
+    assert client.get("/today").status_code == 401
+
+
+def test_a_pooled_connection_carries_no_college_context_to_the_next_request(settings):
+    """Pooling (db.py): RLS settings are transaction-local, and returned connections are reset."""
+    from experience_api import db
+
+    ctx = db.Context(_tenant_id("demo-college"), "college_admin")
+    with db.tx(settings.database_url, ctx) as cur:
+        pid = cur.execute("select pg_backend_pid() as pid").fetchone()["pid"]
+        # Even a session-level setting, which no code should make, is gone on the next use.
+        cur.execute("select set_config('app.role', 'college_admin', false)")
+    seen = set()
+    for _ in range(3):
+        with db.tx(settings.database_url, None) as cur:
+            row = cur.execute(
+                "select pg_backend_pid() as pid,"
+                " coalesce(current_setting('app.tenant_id', true), '') as tenant,"
+                " coalesce(current_setting('app.role', true), '') as role"
+            ).fetchone()
+            assert row["tenant"] == "" and row["role"] == ""
+            seen.add(row["pid"])
+            assert (
+                cur.execute("select count(*) as n from app.leads").fetchone()["n"] == 0
+            )
+    assert pid in seen  # the same connection really was reused
+
+
+def test_an_approver_can_ask_for_a_draft_only_of_their_own_proposals(
+    client, monkeypatch
+):
+    from experience_api.routes import approvals
+
+    monkeypatch.setattr(
+        approvals,
+        "knowledge_get",
+        lambda *a: {
+            "items": [
+                {"id": "p1", "department": None},
+                {"id": "p2", "department": "Computer Science"},
+            ]
+        },
+    )
+    sent = []
+
+    def post(settings, path, tenant, body, method="POST", timeout=None):
+        sent.append((path, timeout.read))
+        return {
+            "draft": {"text": "There is an ATM beside the main gate.", "sources": []}
+        }
+
+    monkeypatch.setattr(approvals, "knowledge_post", post)
+    cs, _ = login(client, "cs.faculty@example.com")
+    r = client.post("/approvals/p2/draft", headers=cs)
+    assert r.status_code == 200 and r.json()["draft"]["text"].startswith("There is")
+    assert sent == [
+        ("/improvements/p2/draft", 120.0)
+    ]  # a model draft may take a minute
+    assert client.post("/approvals/p1/draft", headers=cs).status_code == 404
+    mkt, _ = login(client, "marketing@example.com")
+    assert client.post("/approvals/p2/draft", headers=mkt).status_code == 403
+
+
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+
+
+def test_staff_photo_reaches_only_the_visitor_whose_request_they_claimed(client):
+    officer, _ = login(client, "officer@example.com")
+    put = lambda data, name="p.png": client.put(  # noqa: E731
+        "/auth/me/photo", headers=officer, files={"file": (name, data, "image/png")}
+    )
+    # The type comes from the bytes: an SVG named .png is refused, and so is a big file.
+    assert put(b"<svg onload=alert(1)></svg>").status_code == 415
+    assert put(PNG + b"\x00" * 300_001).status_code == 413
+    assert put(PNG).status_code == 204
+    own = client.get("/auth/me/photo", headers=officer)
+    assert own.status_code == 200 and own.headers["content-type"] == "image/png"
+    assert own.headers["x-content-type-options"] == "nosniff"
+    # Another member of staff cannot read it (RLS: own photo only).
+    cs, _ = login(client, "cs.faculty@example.com")
+    assert client.get("/auth/me/photo", headers=cs).status_code == 404
+
+    v = visitor(client)
+    consent(client, v)
+    client.post(
+        "/leads", headers=v, json={"name": "Photo Test", "phone": "+15550100089"}
+    )
+    photo = lambda h: client.get(  # noqa: E731
+        "/handoffs/mine/photo", params={"conversation_id": "conv-photo"}, headers=h
+    )
+    hid = client.post(
+        "/callbacks",
+        headers=v,
+        json={"conversation_id": "conv-photo", "reason": "Call me"},
+    ).json()["handoff_id"]
+    assert photo(v).status_code == 404  # not claimed yet
+    assert client.post(f"/handoffs/{hid}/claim", headers=officer).status_code == 200
+    got = photo(v)
+    assert got.status_code == 200 and got.content == PNG
+    assert photo(visitor(client)).status_code == 404  # another visitor sees nothing
+    assert client.delete("/auth/me/photo", headers=officer).status_code == 204
+    assert photo(v).status_code == 404
+
+
+def test_staff_reply_by_sms_waits_for_a_provider_then_is_sent_and_forgotten(
+    client, settings, monkeypatch
+):
+    from dataclasses import replace
+
+    from experience_api import messaging
+
+    v = visitor(client)
+    consent(client, v)
+    client.post("/leads", headers=v, json={"name": "Sms Test", "phone": "+15550100090"})
+    hid = client.post(
+        "/callbacks",
+        headers=v,
+        json={"conversation_id": "conv-sms", "reason": "Call me"},
+    ).json()["handoff_id"]
+    officer, _ = login(client, "officer@example.com")
+    r = client.post(
+        f"/handoffs/{hid}/reply",
+        headers=officer,
+        json={"body": "Yes, hostels open in July. " * 30, "send_sms": True},
+    )
+    assert r.status_code == 200, r.text
+    with psycopg.connect(TEST_ADMIN_URL) as conn:
+        row = conn.execute(
+            "select status, destination from app.message_outbox where channel = 'sms'"
+            " and handoff_id = %s",
+            (hid,),
+        ).fetchone()
+    assert row == ("pending", "+15550100090")  # no provider configured: it waits
+    sent = []
+    monkeypatch.setattr(
+        messaging, "SEND_SMS", lambda s, to, text: sent.append((to, text))
+    )
+    on = replace(settings, sms_api_url="http://sms.test/send", sms_api_key="k")
+    tid = _tenant_id("demo-college")
+    assert messaging.deliver_sms(on, tid)["sent"] >= 1
+    to, text = next(x for x in sent if x[0] == "+15550100090")
+    assert len(text) <= messaging.SMS_MAX and text.endswith("…")
+    with psycopg.connect(TEST_ADMIN_URL) as conn:
+        row = conn.execute(
+            "select status, destination, body from app.message_outbox where channel = 'sms'"
+            " and handoff_id = %s",
+            (hid,),
+        ).fetchone()
+    assert row == ("sent", None, None)  # the number and the text are not kept
+
+
+def test_browser_push_goes_only_to_push_services_and_to_whoever_may_see_it(
+    client, settings, monkeypatch, tmp_path
+):
+    import subprocess
+    from dataclasses import replace
+
+    from experience_api import webpush
+    from experience_api.deps import settings_dep
+
+    assert webpush.allowed_endpoint("https://fcm.googleapis.com/fcm/send/abc")
+    assert webpush.allowed_endpoint("https://web.push.apple.com/QGx")
+    for bad in (
+        "http://fcm.googleapis.com/x",  # not https
+        "https://127.0.0.1/x",
+        "https://fcm.googleapis.com.evil.example/x",
+        "https://fcm.googleapis.com:8443/x",
+        "https://metadata.internal/latest",
+    ):
+        assert not webpush.allowed_endpoint(bad), bad
+
+    key = tmp_path / "vapid.pem"
+    subprocess.run(
+        [
+            "openssl",
+            "ecparam",
+            "-name",
+            "prime256v1",
+            "-genkey",
+            "-noout",
+            "-out",
+            str(key),
+        ],
+        check=True,
+    )
+    on = replace(settings, vapid_private_key_file=str(key))
+    client.app.dependency_overrides[settings_dep] = lambda: on
+    try:
+        officer, _ = login(client, "officer@example.com")
+        cs, _ = login(client, "cs.faculty@example.com")
+        assert client.get("/notifications/push/key", headers=officer).json()["enabled"]
+        sub = lambda h, e: client.post(  # noqa: E731
+            "/notifications/push/subscription", headers=h, json={"endpoint": e}
+        )
+        assert sub(officer, "https://169.254.169.254/latest/meta").status_code == 422
+        officer_ep = "https://fcm.googleapis.com/fcm/send/officer-browser-0001"
+        cs_ep = "https://updates.push.services.mozilla.com/wpush/v2/cs-browser-0001"
+        assert sub(officer, officer_ep).status_code == 204
+        assert sub(cs, cs_ep).status_code == 204
+
+        sent = []
+        monkeypatch.setattr(webpush, "SEND", lambda s, e: sent.append(e) or 201)
+        webpush.deliver(on)  # anything older than this test is already marked pushed
+        sent.clear()
+        v = visitor(client)
+        consent(client, v)
+        client.post(
+            "/leads", headers=v, json={"name": "Push Test", "phone": "+15550100091"}
+        )
+        client.post(
+            "/callbacks",
+            headers=v,
+            json={
+                "conversation_id": "conv-push",
+                "reason": "Call me",
+                "queue": "admission",
+            },
+        )
+        assert webpush.deliver(on) == {"sent": 1}
+        assert sent == [officer_ep]  # the admission queue: not the CS faculty member
+        assert webpush.deliver(on) == {}  # pushed once
+
+        # A browser that dropped the subscription is forgotten.
+        monkeypatch.setattr(webpush, "SEND", lambda s, e: 410)
+        client.post(
+            "/callbacks",
+            headers=v,
+            json={
+                "conversation_id": "conv-push-2",
+                "reason": "Call me",
+                "queue": "admission",
+            },
+        )
+        assert webpush.deliver(on) == {"gone": 1}
+        with psycopg.connect(TEST_ADMIN_URL) as conn:
+            left = conn.execute(
+                "select count(*) from app.push_subscriptions where endpoint = %s",
+                (officer_ep,),
+            ).fetchone()[0]
+        assert left == 0
+    finally:
+        client.app.dependency_overrides[settings_dep] = lambda: settings
+
+
+def test_one_failing_messaging_step_does_not_stop_the_others(settings, monkeypatch):
+    """A wrong push key once would have stopped callback e-mails for every college."""
+    from experience_api import messaging, webpush
+
+    def broken(*a):
+        raise FileNotFoundError("vapid.pem")
+
+    escalated = []
+    monkeypatch.setattr(webpush, "deliver", broken)
+    monkeypatch.setattr(
+        messaging, "escalate_overdue", lambda s, t: escalated.append(t) or 0
+    )
+    out = messaging.run_once(settings)
+    assert out["errors"]["push"] == "FileNotFoundError"
+    assert escalated  # the later steps still ran, for every college
+
+
+def test_review_queue_shows_what_each_rating_is_about(client, monkeypatch):
+    from experience_api.clients import UpstreamError
+    from experience_api.routes import feedback
+
+    v = visitor(client)
+    client.post(
+        "/feedback",
+        headers=v,
+        json={
+            "conversation_id": "conv-rv",
+            "message_id": "m-real",
+            "kind": "thumb",
+            "value": -1,
+        },
+    )
+    client.post(
+        "/feedback",
+        headers=v,
+        json={
+            "conversation_id": "conv-rv",
+            "message_id": "m-gone",
+            "kind": "thumb",
+            "value": -1,
+        },
+    )
+    monkeypatch.setattr(
+        feedback,
+        "assistant_post",
+        lambda s, path, t, body: {
+            "items": {
+                "m-real": {
+                    "question": "Is there an ATM?",
+                    "answer": "I don't know.",
+                    "outcome": "no_answer",
+                }
+            }
+        },
+    )
+    officer, _ = login(client, "officer@example.com")
+    rows = {r["message_id"]: r for r in client.get("/feedback", headers=officer).json()}
+    assert (
+        rows["m-real"]["text"] == "found"
+        and rows["m-real"]["question"] == "Is there an ATM?"
+    )
+    assert rows["m-gone"]["text"] == "missing" and rows["m-gone"]["answer"] is None
+
+    def down(*a):
+        raise UpstreamError("down")
+
+    monkeypatch.setattr(feedback, "assistant_post", down)
+    rows = {r["message_id"]: r for r in client.get("/feedback", headers=officer).json()}
+    assert (
+        rows["m-real"]["text"] == "unavailable"
+    )  # the page says so; it still lists the rating
+
+
+def test_a_correction_from_a_reply_carries_the_visitors_question(client, settings):
+    """Module A turns a correction into a curated answer, which needs the question it answers."""
+    with psycopg.connect(TEST_ADMIN_URL) as conn:
+        tid = str(
+            conn.execute(
+                "select id from app.tenants where slug = 'demo-college'"
+            ).fetchone()[0]
+        )
+    svc = {"X-Service-Key": settings.service_key, "X-Tenant-Id": tid}
+    hid = client.post(
+        "/handoffs",
+        headers=svc,
+        json={
+            "conversation_id": "conv-corr-q",
+            "queue": "admission",
+            "kind": "handoff",
+            "reason": "Asked to talk to a person",
+            "context": {
+                "ai_draft": "I don't know.",
+                "transcript": [
+                    {"role": "user", "text": "Is there an ATM on campus?"},
+                    {"role": "assistant", "text": "I don't know."},
+                ],
+            },
+        },
+    ).json()["id"]
+    officer, _ = login(client, "officer@example.com")
+    r = client.post(
+        f"/handoffs/{hid}/reply",
+        headers=officer,
+        json={
+            "body": "Yes, there is an ATM beside the main gate.",
+            "as_correction": True,
+        },
+    )
+    assert r.status_code == 200, r.text
+    with psycopg.connect(TEST_ADMIN_URL) as conn:
+        payload = conn.execute(
+            "select payload from app.outbox_events where type = 'correction.submitted'"
+            " and payload->>'conversation_id' = 'conv-corr-q'"
+        ).fetchone()[0]
+    assert payload["question"] == "Is there an ATM on campus?"
+    assert payload["corrected_answer"].startswith("Yes, there is an ATM")
+
+
+def test_review_queue_says_where_each_correction_is(client, monkeypatch):
+    from experience_api.clients import UpstreamError
+    from experience_api.routes import feedback
+
+    v = visitor(client)
+    client.post(
+        "/feedback",
+        headers=v,
+        json={
+            "conversation_id": "conv-st",
+            "message_id": "m-st",
+            "kind": "thumb",
+            "value": -1,
+        },
+    )
+    officer, _ = login(client, "officer@example.com")
+    made = client.post(
+        "/corrections",
+        headers=officer,
+        json={
+            "conversation_id": "conv-st",
+            "message_id": "m-st",
+            "corrected_answer": "Yes, there is.",
+            "reason": "Wrong",
+        },
+    )
+    assert made.status_code == 201, made.text
+    monkeypatch.setattr(feedback, "assistant_post", lambda *a: {"items": {}})
+    asked = []
+
+    def stages(s, path, t, params):
+        asked.append(params["ids"])
+        return {"items": {params["ids"]: {"stage": "waiting_approval"}}}
+
+    monkeypatch.setattr(feedback, "knowledge_get", stages)
+    row = next(
+        r
+        for r in client.get("/feedback", headers=officer).json()
+        if r["message_id"] == "m-st"
+    )
+    assert row["correction_stage"] == "waiting_approval" and asked
+
+    def down(*a):
+        raise UpstreamError("down")
+
+    monkeypatch.setattr(feedback, "knowledge_get", down)
+    row = next(
+        r
+        for r in client.get("/feedback", headers=officer).json()
+        if r["message_id"] == "m-st"
+    )
+    assert row["correction_stage"] == "sent"  # Module A cannot say: as before
+
+
+def test_the_daily_retention_sweep_covers_every_college(settings):
+    """PRD 11.4: what the service now runs every RETENTION_SWEEP_HOURS (seen 18 Nov 2026: the
+    sweep existed but nothing ever ran it)."""
+    from experience_api.privacy import sweep_all
+
+    done = sweep_all(settings)
+    assert len(done["tenants"]) >= 2 and isinstance(done["audit_rows_removed"], int)
+    assert settings.retention_sweep_hours == 0  # test apps start no sweep thread

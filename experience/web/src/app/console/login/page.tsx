@@ -9,7 +9,7 @@ import { themeStyle } from "@/lib/theme";
 
 export default function Login() {
   const router = useRouter();
-  const [form, setForm] = useState({ tenant: "demo-college", email: "", password: "", code: "" });
+  const [form, setForm] = useState({ tenant: "ruas", email: "", password: "", code: "" });
   const [mfa, setMfa] = useState<MfaChallenge | null>(null);
   const [qr, setQr] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);

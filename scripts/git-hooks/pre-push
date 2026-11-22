@@ -1,0 +1,17 @@
+#!/bin/sh
+# Pushes are allowed only to the owner's private copy, and only while GitHub does not show it
+# publicly (an anonymous API request to a private repo gets 404). Anything else is refused:
+# this repository mixes all three modules and holds RUAS content that must not go public.
+ALLOWED_REPO="ramitharavichandra/admitai-prototype"
+url="$2"
+case "$url" in
+  "https://github.com/$ALLOWED_REPO" | "https://github.com/$ALLOWED_REPO.git" | \
+  "git""@github.com:$ALLOWED_REPO.git") ;;
+  *) echo "Push refused: only $ALLOWED_REPO (private) is allowed, not $url" >&2; exit 1 ;;
+esac
+code=$(curl -s -o /dev/null -w "%{http_code}" -m 10 "https://api.github.com/repos/$ALLOWED_REPO")
+if [ "$code" != "404" ]; then
+  echo "Push refused: $ALLOWED_REPO looks public or could not be checked (HTTP $code)." >&2
+  exit 1
+fi
+exit 0

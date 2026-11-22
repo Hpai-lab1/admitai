@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { TenantInfo } from "@/lib/widget-api";
+import { hasContactConsent, type ConsentRecord, type TenantInfo } from "@/lib/widget-api";
 import { ContactFlow } from "./ContactFlow";
 
 const tenant = {
@@ -65,9 +65,10 @@ describe("ContactFlow", () => {
     fireEvent.click(await screen.findByRole("button", { name: /under 18/i }));
     expect(screen.getByLabelText(/parent's or guardian's e-mail/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/mobile number/i)).not.toBeInTheDocument();
-    const bodies = fetchMock.mock.calls.map((c) =>
-      JSON.parse(String((c as unknown[])[1] && ((c as unknown[])[1] as RequestInit).body)),
-    );
+    const bodies = fetchMock.mock.calls
+      .map((c) => ((c as unknown[])[1] as RequestInit | undefined)?.body)
+      .filter(Boolean) // the GET of earlier consents has no body
+      .map((b) => JSON.parse(String(b)));
     expect(bodies[0]).toMatchObject({ purpose: "contact", granted: true, text_version: "v1" });
     vi.unstubAllGlobals();
   });
@@ -112,6 +113,59 @@ describe("ContactFlow with Module B's signals", () => {
     fireEvent.click(screen.getByRole("button", { name: "Agree and continue" }));
     expect(await screen.findByLabelText(/parent's or guardian's e-mail/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /under 18/i })).not.toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("ContactFlow in the same chat again", () => {
+  const yes = (over: Partial<ConsentRecord> = {}): ConsentRecord => ({
+    purpose: "contact",
+    granted: true,
+    given_by: "self",
+    text_version: "v1",
+    captured_at: "2026-11-08T10:00:00Z",
+    withdrawn_at: null,
+    ...over,
+  });
+
+  it("reuses only a current, own, unwithdrawn yes to the contact consent", () => {
+    expect(hasContactConsent([yes()], "v1")).toBe(true);
+    expect(hasContactConsent([yes()], "v2")).toBe(false); // the wording changed: ask again
+    expect(hasContactConsent([yes({ withdrawn_at: "2026-11-08T11:00:00Z" })], "v1")).toBe(false);
+    expect(hasContactConsent([yes({ purpose: "marketing" })], "v1")).toBe(false);
+    expect(hasContactConsent([yes({ given_by: "guardian" })], "v1")).toBe(false);
+    expect(
+      hasContactConsent([yes(), yes({ granted: false, captured_at: "2026-11-08T12:00:00Z" })], "v1"),
+    ).toBe(false); // the latest answer counts
+    expect(hasContactConsent([], "v1")).toBe(false);
+  });
+
+  it("skips consent and age when the visitor already answered both in this chat", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify([yes()]), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+    render(
+      <ContactFlow
+        intent="enquiry"
+        token="t"
+        tenant={tenant}
+        conversationId="c"
+        transcript={[]}
+        knownAdult
+        onClose={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText(/already agreed earlier in this chat/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Agree and continue" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /under 18/i })).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/mobile number/i)).toBeInTheDocument();
     vi.unstubAllGlobals();
   });
 });

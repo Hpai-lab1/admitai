@@ -119,7 +119,8 @@ def import_catalogue(cur: psycopg.Cursor, tenant_id: str, data: dict) -> dict:
     for p in data["programs"]:
         cur.execute(
             "insert into kb.programs (tenant_id, code, name, aliases, department, level, duration_months,"
-            " intake, eligibility, contact, academic_year) values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) returning id",
+            " intake, eligibility, contact, academic_year, source_url)"
+            " values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) returning id",
             (
                 tenant_id,
                 p["code"],
@@ -132,6 +133,7 @@ def import_catalogue(cur: psycopg.Cursor, tenant_id: str, data: dict) -> dict:
                 p["eligibility"] or None,
                 p.get("contact") or None,
                 p["academic_year"],
+                p.get("source_url") or None,
             ),
         )
         ids[p["code"]] = cur.fetchone()["id"]
@@ -178,13 +180,14 @@ def _amount(v: Decimal) -> str:
 
 def _program_facts(cur: psycopg.Cursor, p: dict, today: date) -> dict:
     cur.execute(
-        "select category, component, amount, currency, period, valid_from, valid_to from kb.program_fees"
+        "select id, category, component, amount, currency, period, valid_from, valid_to from kb.program_fees"
         " where program_id = %s and (valid_to is null or valid_to >= %s) order by category, component",
         (p["id"], today),
     )
     fees = [
         {
             **f,
+            "id": str(f["id"]),
             "amount": _amount(f["amount"]),
             "valid_from": f["valid_from"].isoformat() if f["valid_from"] else None,
             "valid_to": f["valid_to"].isoformat() if f["valid_to"] else None,
@@ -213,10 +216,12 @@ def _program_facts(cur: psycopg.Cursor, p: dict, today: date) -> dict:
         "academic_year": p["academic_year"],
         "fees": fees,
         "dates": dates,
+        "source_url": p.get("source_url"),
         "citation": {
             "source_type": "catalogue",
             "title": f"Program catalogue {p['academic_year']}: {p['name']}",
             "academic_year": p["academic_year"],
+            "url": p.get("source_url"),
         },
     }
 
@@ -277,3 +282,39 @@ def general_dates(cur: psycopg.Cursor, academic_year: str | None = None) -> list
         }
         for d in cur.fetchall()
     ]
+
+
+def set_fee(cur: psycopg.Cursor, fee_id: str, amount: Decimal) -> dict | None:
+    """Change one fee (the College Admin's console edit). The test questions that expected the
+    old amount for this programme now expect the new one, so the next evaluation is not failed
+    by the change itself. Returns the old and new amounts, or None if there is no such fee."""
+    cur.execute(
+        "select f.*, p.code, p.name, p.aliases from kb.program_fees f"
+        " join kb.programs p on p.id = f.program_id where f.id::text = %s for update of f",
+        (fee_id,),
+    )
+    f = cur.fetchone()
+    if f is None:
+        return None
+    old, new = _amount(f["amount"]), _amount(amount)
+    cur.execute(
+        "update kb.program_fees set amount = %s, updated_at = now() where id = %s",
+        (amount, f["id"]),
+    )
+    if old != new:
+        names = [f["code"], f["name"], *f["aliases"]]
+        cur.execute(
+            "update learn.eval_cases set expected_facts = array_replace(expected_facts, %s, %s)"
+            " where active and %s = any(expected_facts) and source <> 'catalogue'"
+            " and exists (select 1 from unnest(%s::text[]) n where length(n) >= 2"
+            " and position(lower(n) in lower(question)) > 0)",
+            (old, new, old, names),
+        )
+    return {
+        "id": str(f["id"]),
+        "program": f["name"],
+        "component": f["component"],
+        "category": f["category"],
+        "old_amount": old,
+        "amount": new,
+    }

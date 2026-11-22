@@ -63,6 +63,22 @@ describe("roles", () => {
   it("gives college admins everything", () => {
     expect(navFor("college_admin").map((n) => n.label)).toContain("Admin");
   });
+  it("lets counsellors work the queue and leads but not approve", () => {
+    const labels = navFor("admission_counsellor").map((n) => n.label);
+    expect(labels).toEqual(expect.arrayContaining(["Queue", "Leads", "Review answers"]));
+    expect(labels).not.toContain("Approvals");
+  });
+  it("gives finance and hostel staff their queue and approvals, not leads", () => {
+    for (const role of ["finance_officer", "hostel_warden"] as const) {
+      const labels = navFor(role).map((n) => n.label);
+      expect(labels).toEqual(expect.arrayContaining(["Queue", "Approvals"]));
+      expect(labels).not.toContain("Leads");
+    }
+  });
+  it("shows management analytics only", () => {
+    expect(navFor("management").map((n) => n.label)).toEqual(["Analytics"]);
+    expect(homeFor("management")).toBe("/console/analytics");
+  });
 });
 
 describe("slaText", () => {

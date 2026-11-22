@@ -11,9 +11,18 @@ import {
   escalationText,
   canApproveAgain,
   needsAnswer,
+  sortInbox,
+  decisionLabel,
+  type InboxOrder,
 } from "@/components/console/proposals";
-import { Badge, Empty, Loading, Notice, PageHeader, useApi } from "@/components/console/ui";
+import { Badge, Empty, Loading, Notice, PageHeader, useApi, useRefreshWhile } from "@/components/console/ui";
+import { type Draft, DraftButton } from "@/components/console/draft";
+import { CatalogueConflict } from "@/components/console/CatalogueConflict";
 import { ApiError, staff } from "@/lib/api";
+
+/** College Admin only: the change reaches visitors before it is tested (PRD 8.4 tests it after). */
+const URGENT_CONFIRM =
+  "Publish now: visitors get this change within seconds, before it is tested. The tests still run, and if they fail the change is taken down automatically. Use this only for an urgent fix. Continue?";
 
 export default function Approvals() {
   const me = useMe();
@@ -23,12 +32,16 @@ export default function Approvals() {
     held?: number;
   }>("/approvals");
   const history = useApi<{ items: Proposal[] }>("/approvals/history");
+  // While an approved change is being tested, its result shows up here without a reload.
+  useRefreshWhile(!!history.data?.items.some((p) => p.status === "evaluating"), history.reload);
   const second = useApi<{ items: Proposal[] }>("/approvals/second-reviews");
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
-  const items = data?.items ?? [];
+  // Newest first by default, so a correction just made is on top; impact order on request.
+  const [order, setOrder] = useState<InboxOrder>("newest");
+  const items = sortInbox(data?.items ?? [], order);
   const batchable = items.filter((p) => !needsAnswer(p));
 
   const toggle = (id: string) =>
@@ -39,12 +52,12 @@ export default function Approvals() {
       return n;
     });
 
-  async function decide(ids: string[], decision: "approve" | "reject", note?: string) {
+  async function decide(ids: string[], decision: "approve" | "reject", note?: string, publishNow = false) {
     setMsg(null);
     try {
       const r = await staff<{ results: { id: string; ok: boolean; error?: string }[] }>("/approvals/decide", {
         method: "POST",
-        body: JSON.stringify({ ids, decision, note: note ?? null }),
+        body: JSON.stringify({ ids, decision, note: note ?? null, publish_now: publishNow }),
       });
       const ok = r.results.filter((x) => x.ok).length;
       const failed = [...new Set(r.results.filter((x) => !x.ok).map((x) => x.error))];
@@ -52,7 +65,11 @@ export default function Approvals() {
         kind: failed.length ? "error" : "ok",
         text:
           `${ok} of ${r.results.length} ${decision}d.` +
-          (decision === "approve" && ok ? " Each change goes live only after it passes the test set." : "") +
+          (decision === "approve" && ok
+            ? publishNow
+              ? " Live now and being tested; anything that fails the tests is taken down again."
+              : " Each change goes live only after it passes the test set."
+            : "") +
           (failed.length ? ` ${failed.join(" ")}` : ""),
       });
       setPicked(new Set());
@@ -115,34 +132,69 @@ export default function Approvals() {
     <>
       <PageHeader
         title="Approval inbox"
-        sub="Suggested fixes to the assistant's knowledge, biggest impact first. Nothing changes until someone approves it, and an approved change goes live only if the test set still passes."
+        sub="Suggested fixes to the assistant's knowledge. Nothing changes until someone approves it, and an approved change goes live only if the test set still passes."
       >
-        <button
-          className="btn-primary"
-          disabled={!picked.size}
-          onClick={() => void decide([...picked], "approve")}
+        <label htmlFor="order" className="sr-only">
+          Order
+        </label>
+        <select
+          id="order"
+          className="field w-auto"
+          value={order}
+          onChange={(e) => setOrder(e.target.value as InboxOrder)}
         >
-          Approve {picked.size || ""}
-        </button>
-        <button
-          className="btn-secondary"
-          disabled={!picked.size}
-          onClick={() => void decide([...picked], "reject")}
-        >
-          Reject
-        </button>
+          <option value="newest">Newest first</option>
+          <option value="impact">Biggest impact first</option>
+        </select>
       </PageHeader>
+      {/* Bulk actions appear only once something is selected, and stay in view while scrolling. */}
+      {picked.size > 0 && (
+        <div
+          role="region"
+          aria-label="Selected changes"
+          className="sticky top-0 z-10 mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-line bg-surface px-4 py-2 shadow-sm"
+        >
+          <p className="mr-auto text-sm font-medium">
+            {picked.size} selected
+            <button className="ml-3 text-xs text-muted underline" onClick={() => setPicked(new Set())}>
+              Clear
+            </button>
+          </p>
+          <button className="btn-primary btn-sm" onClick={() => void decide([...picked], "approve")}>
+            Approve {picked.size}
+          </button>
+          <button
+            className="btn-quiet btn-sm"
+            onClick={() => {
+              if (window.confirm(`Reject ${picked.size} suggested change${picked.size === 1 ? "" : "s"}?`))
+                void decide([...picked], "reject");
+            }}
+          >
+            Reject
+          </button>
+          {me.role === "college_admin" && (
+            <button
+              className="btn-quiet btn-sm"
+              onClick={() => {
+                if (window.confirm(URGENT_CONFIRM)) void decide([...picked], "approve", undefined, true);
+              }}
+            >
+              Publish now (urgent)
+            </button>
+          )}
+        </div>
+      )}
       {msg && <Notice kind={msg.kind}>{msg.text}</Notice>}
       {error && <Notice>{error}</Notice>}
       {data && (data.peak_season || me.role === "college_admin") && (
-        <div className="card mb-4 flex flex-wrap items-center gap-3 p-4 text-sm">
+        <div className="mb-4 flex flex-wrap items-center gap-3 text-sm text-muted">
           <p className="mr-auto">
             {data.peak_season
               ? `Peak season: only wrong facts come here; ${data.held ?? 0} lower-priority fix${data.held === 1 ? " is" : "es are"} waiting until after the peak.`
               : "Admission season busy? Peak-season mode sends only wrong-fact fixes to reviewers."}
           </p>
           {me.role === "college_admin" && (
-            <button className="btn-secondary" onClick={() => void setPeak(!data.peak_season)}>
+            <button className="btn-quiet btn-sm" onClick={() => void setPeak(!data.peak_season)}>
               {data.peak_season ? "End peak season" : "Start peak season"}
             </button>
           )}
@@ -181,11 +233,14 @@ export default function Approvals() {
                     {p.overdue && <Badge tone="amber">Past the 3-day approval target</Badge>}
                     {escalationText(p) && <Badge tone="red">{escalationText(p)}</Badge>}
                     {p.evidence_count != null && (
-                      <span className="text-xs text-muted">{p.evidence_count} conversations</span>
+                      <span className="text-xs text-muted">
+                        {p.evidence_count} {p.evidence_count === 1 ? "conversation" : "conversations"}
+                      </span>
                     )}
                   </div>
-                  <p className="mt-2 font-semibold">{p.title}</p>
+                  <p className="mt-2 font-medium">{p.title}</p>
                   <ProposalDiff p={p} />
+                  <CatalogueConflict conflicts={p.catalogue_conflicts ?? []} changes={p.fee_changes ?? []} />
                   {needsAnswer(p) && (
                     <form
                       className="mt-3"
@@ -197,6 +252,11 @@ export default function Approvals() {
                       <label htmlFor={`ans-${p.id}`} className="text-sm font-medium">
                         Write the answer the assistant should give
                       </label>
+                      <DraftButton
+                        proposalId={p.id}
+                        earlier={(p.diff?.draft as Draft | undefined) ?? null}
+                        onDraft={(text) => setAnswers((a) => ({ ...a, [p.id]: text }))}
+                      />
                       <textarea
                         id={`ans-${p.id}`}
                         className="field mt-1 min-h-20"
@@ -209,6 +269,19 @@ export default function Approvals() {
                       >
                         Approve with this answer
                       </button>
+                      {me.role === "college_admin" && (
+                        <button
+                          type="button"
+                          className="btn-quiet ml-2 mt-2"
+                          disabled={(answers[p.id] ?? "").trim().length < 15}
+                          onClick={() => {
+                            if (window.confirm(URGENT_CONFIRM))
+                              void decide([p.id], "approve", answers[p.id], true);
+                          }}
+                        >
+                          Publish now (urgent)
+                        </button>
+                      )}
                     </form>
                   )}
                   {!!p.examples?.length && (
@@ -231,7 +304,7 @@ export default function Approvals() {
                   <p className="text-xs text-muted">Impact</p>
                   <div className="mt-1 h-2 rounded-full bg-subtle" aria-hidden>
                     <div
-                      className="brand-gradient h-2 rounded-full"
+                      className="h-1.5 rounded-full bg-brand"
                       style={{ width: `${Math.round(p.impact_score * 100)}%` }}
                     />
                   </div>
@@ -241,6 +314,64 @@ export default function Approvals() {
             ))}
           </ul>
         </>
+      )}
+
+      <h2 className="mb-2 mt-8 text-lg font-semibold">Recent decisions</h2>
+      {history.loading && !history.data ? (
+        <Loading rows={2} />
+      ) : !history.data?.items.length ? (
+        <Empty>No decisions yet.</Empty>
+      ) : (
+        <ul className="space-y-2">
+          {history.data.items.map((p) => (
+            <li key={p.id} className="card flex flex-wrap items-start gap-3 p-3 text-sm">
+              <Badge
+                tone={
+                  p.published_early && p.status === "evaluating"
+                    ? "green"
+                    : (STATUS_TONE[p.status ?? ""] ?? "gray")
+                }
+              >
+                {decisionLabel(p)}
+              </Badge>
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">{p.title}</p>
+                <GateSummary gate={p.eval?.gate ?? null} note={p.note} />
+              </div>
+              {canApproveAgain(p) && (
+                <button
+                  className="btn-quiet px-3 text-xs"
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        "This runs the whole test set again. It takes several minutes, and the assistant is slower until it finishes. Continue?",
+                      )
+                    )
+                      void decide([p.id], "approve");
+                  }}
+                >
+                  Approve again
+                </button>
+              )}
+              {me.role === "college_admin" && p.status === "deployed" && (
+                <button
+                  className="btn-quiet px-3 text-xs"
+                  onClick={() => {
+                    // Undoing a live change is the College Admin's decision: never one click.
+                    if (
+                      window.confirm(
+                        `Roll back "${p.title}"? Visitors go back to the answer they got before it was approved.`,
+                      )
+                    )
+                      void rollback(p.id);
+                  }}
+                >
+                  Roll back
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
       )}
 
       {!!second.data?.items.length && (
@@ -278,7 +409,7 @@ export default function Approvals() {
                     Agree
                   </button>
                   <button
-                    className="btn-secondary px-3 text-xs"
+                    className="btn-quiet px-3 text-xs"
                     onClick={() => void secondReview(p.id, "disagree")}
                   >
                     Disagree
@@ -291,35 +422,6 @@ export default function Approvals() {
       )}
 
       {me.role === "college_admin" && <Delegates onSaved={(text) => setMsg({ kind: "ok", text })} />}
-
-      <h2 className="mb-2 mt-8 text-lg font-semibold">Recent decisions</h2>
-      {history.loading && !history.data ? (
-        <Loading rows={2} />
-      ) : !history.data?.items.length ? (
-        <Empty>No decisions yet.</Empty>
-      ) : (
-        <ul className="space-y-2">
-          {history.data.items.map((p) => (
-            <li key={p.id} className="card flex flex-wrap items-start gap-3 p-3 text-sm">
-              <Badge tone={STATUS_TONE[p.status ?? ""] ?? "gray"}>{(p.status ?? "").replace("_", " ")}</Badge>
-              <div className="min-w-0 flex-1">
-                <p className="font-medium">{p.title}</p>
-                <GateSummary gate={p.eval?.gate ?? null} note={p.note} />
-              </div>
-              {canApproveAgain(p) && (
-                <button className="btn-secondary px-3 text-xs" onClick={() => void decide([p.id], "approve")}>
-                  Approve again
-                </button>
-              )}
-              {me.role === "college_admin" && p.status === "deployed" && (
-                <button className="btn-secondary px-3 text-xs" onClick={() => void rollback(p.id)}>
-                  Roll back
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
     </>
   );
 }
@@ -385,7 +487,7 @@ function Delegates({ onSaved }: { onSaved: (text: string) => void }) {
           </div>
         ))}
         <div className="flex gap-2">
-          <button type="button" className="btn-secondary" onClick={() => setRows([...list, ["", ""]])}>
+          <button type="button" className="btn-quiet" onClick={() => setRows([...list, ["", ""]])}>
             Add a department
           </button>
           <button className="btn-primary">Save delegates</button>

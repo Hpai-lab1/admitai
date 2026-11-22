@@ -1,0 +1,7 @@
+program_code,category,component,amount,currency,period
+BCOM,general,tuition,85000,INR,per year
+BBA,general,tuition,140000,INR,per year
+MBA,general,tuition,260000,INR,per year
+BCOM,general,application,800,INR,one time
+BBA,general,application,800,INR,one time
+MBA,general,application,1500,INR,one time

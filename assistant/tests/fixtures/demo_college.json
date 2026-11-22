@@ -1,0 +1,986 @@
+{
+ "note": "Synthetic demo college, generated from packs/demo-college for Module B's tests and its mock Module A. Shapes follow Module A's /catalogue/programs?facts=true and /kb/search.",
+ "catalogue": {
+  "items": [
+   {
+    "id": "abbd4ec5-aa44-5df9-ac71-6826f900bcee",
+    "code": "BTECH-CSE",
+    "name": "B.Tech Computer Science and Engineering",
+    "aliases": [
+     "CSE",
+     "Computer Science",
+     "B.Tech CS"
+    ],
+    "department": "Computer Science",
+    "level": "UG",
+    "duration_months": 48,
+    "intake": 120,
+    "eligibility": "10+2 with Physics, Chemistry and Mathematics, at least 50% (45% for reserved categories), and a valid entrance test rank",
+    "contact": "admissions@demo-college.example",
+    "academic_year": "2027-28",
+    "fees": [
+     {
+      "category": "general",
+      "component": "tuition",
+      "amount": 250000,
+      "currency": "INR",
+      "period": "per year",
+      "valid_from": null,
+      "valid_to": null
+     },
+     {
+      "category": "management",
+      "component": "tuition",
+      "amount": 412500,
+      "currency": "INR",
+      "period": "per year",
+      "valid_from": null,
+      "valid_to": null
+     },
+     {
+      "category": "general",
+      "component": "hostel",
+      "amount": 90000,
+      "currency": "INR",
+      "period": "per year",
+      "valid_from": null,
+      "valid_to": null
+     },
+     {
+      "category": "general",
+      "component": "application",
+      "amount": 1200,
+      "currency": "INR",
+      "period": "one time",
+      "valid_from": null,
+      "valid_to": null
+     }
+    ],
+    "dates": [
+     {
+      "label": "Applications open",
+      "date": "2027-01-15"
+     },
+     {
+      "label": "Last date to apply",
+      "date": "2027-06-30"
+     },
+     {
+      "label": "First counselling round",
+      "date": "2027-07-12"
+     },
+     {
+      "label": "Classes begin",
+      "date": "2027-08-16"
+     }
+    ],
+    "citation": {
+     "source_type": "catalogue",
+     "title": "Program catalogue 2027-28: B.Tech Computer Science and Engineering",
+     "academic_year": "2027-28"
+    }
+   },
+   {
+    "id": "534b9798-d051-5ff1-92ed-27c6c2395ab8",
+    "code": "BTECH-ME",
+    "name": "B.Tech Mechanical Engineering",
+    "aliases": [
+     "ME",
+     "Mechanical",
+     "Mech"
+    ],
+    "department": "Mechanical",
+    "level": "UG",
+    "duration_months": 48,
+    "intake": 60,
+    "eligibility": "10+2 with Physics, Chemistry and Mathematics, at least 50% (45% for reserved categories), and a valid entrance test rank",
+    "contact": "admissions@demo-college.example",
+    "academic_year": "2027-28",
+    "fees": [
+     {
+      "category": "general",
+      "component": "tuition",
+      "amount": 210000,
+      "currency": "INR",
+      "period": "per year",
+      "valid_from": null,
+      "valid_to": null
+     },
+     {
+      "category": "management",
+      "component": "tuition",
+      "amount": 330000,
+      "currency": "INR",
+      "period": "per year",
+      "valid_from": null,
+      "valid_to": null
+     },
+     {
+      "category": "general",
+      "component": "hostel",
+      "amount": 90000,
+      "currency": "INR",
+      "period": "per year",
+      "valid_from": null,
+      "valid_to": null
+     },
+     {
+      "category": "general",
+      "component": "application",
+      "amount": 1200,
+      "currency": "INR",
+      "period": "one time",
+      "valid_from": null,
+      "valid_to": null
+     }
+    ],
+    "dates": [
+     {
+      "label": "Applications open",
+      "date": "2027-01-15"
+     },
+     {
+      "label": "Last date to apply",
+      "date": "2027-06-30"
+     },
+     {
+      "label": "First counselling round",
+      "date": "2027-07-12"
+     },
+     {
+      "label": "Classes begin",
+      "date": "2027-08-16"
+     }
+    ],
+    "citation": {
+     "source_type": "catalogue",
+     "title": "Program catalogue 2027-28: B.Tech Mechanical Engineering",
+     "academic_year": "2027-28"
+    }
+   },
+   {
+    "id": "8715fd97-e057-5349-a4f4-6c8e297612a0",
+    "code": "BTECH-CE",
+    "name": "B.Tech Civil Engineering",
+    "aliases": [
+     "CE",
+     "Civil"
+    ],
+    "department": "Civil",
+    "level": "UG",
+    "duration_months": 48,
+    "intake": 60,
+    "eligibility": "10+2 with Physics, Chemistry and Mathematics, at least 50% (45% for reserved categories), and a valid entrance test rank",
+    "contact": "admissions@demo-college.example",
+    "academic_year": "2027-28",
+    "fees": [
+     {
+      "category": "general",
+      "component": "tuition",
+      "amount": 190000,
+      "currency": "INR",
+      "period": "per year",
+      "valid_from": null,
+      "valid_to": null
+     },
+     {
+      "category": "management",
+      "component": "tuition",
+      "amount": 300000,
+      "currency": "INR",
+      "period": "per year",
+      "valid_from": null,
+      "valid_to": null
+     },
+     {
+      "category": "general",
+      "component": "hostel",
+      "amount": 90000,
+      "currency": "INR",
+      "period": "per year",
+      "valid_from": null,
+      "valid_to": null
+     },
+     {
+      "category": "general",
+      "component": "application",
+      "amount": 1200,
+      "currency": "INR",
+      "period": "one time",
+      "valid_from": null,
+      "valid_to": null
+     }
+    ],
+    "dates": [
+     {
+      "label": "Applications open",
+      "date": "2027-01-15"
+     },
+     {
+      "label": "Last date to apply",
+      "date": "2027-06-30"
+     },
+     {
+      "label": "First counselling round",
+      "date": "2027-07-12"
+     },
+     {
+      "label": "Classes begin",
+      "date": "2027-08-16"
+     }
+    ],
+    "citation": {
+     "source_type": "catalogue",
+     "title": "Program catalogue 2027-28: B.Tech Civil Engineering",
+     "academic_year": "2027-28"
+    }
+   },
+   {
+    "id": "a28e37d6-9307-5ccd-b63b-6e3b09d85a9d",
+    "code": "MTECH-CSE",
+    "name": "M.Tech Computer Science and Engineering",
+    "aliases": [
+     "M.Tech CSE",
+     "MTech CS",
+     "M.Tech Computer Science",
+     "M.Tech"
+    ],
+    "department": "Computer Science",
+    "level": "PG",
+    "duration_months": 24,
+    "intake": 18,
+    "eligibility": "B.E./B.Tech in a related branch with at least 50%; GATE score preferred",
+    "contact": "admissions@demo-college.example",
+    "academic_year": "2027-28",
+    "fees": [
+     {
+      "category": "general",
+      "component": "tuition",
+      "amount": 180000,
+      "currency": "INR",
+      "period": "per year",
+      "valid_from": null,
+      "valid_to": null
+     },
+     {
+      "category": "general",
+      "component": "hostel",
+      "amount": 90000,
+      "currency": "INR",
+      "period": "per year",
+      "valid_from": null,
+      "valid_to": null
+     },
+     {
+      "category": "general",
+      "component": "application",
+      "amount": 1500,
+      "currency": "INR",
+      "period": "one time",
+      "valid_from": null,
+      "valid_to": null
+     }
+    ],
+    "dates": [
+     {
+      "label": "Applications open",
+      "date": "2027-01-15"
+     },
+     {
+      "label": "Written test and interview",
+      "date": "2027-06-05"
+     },
+     {
+      "label": "Last date to apply",
+      "date": "2027-06-30"
+     },
+     {
+      "label": "First counselling round",
+      "date": "2027-07-12"
+     },
+     {
+      "label": "Classes begin",
+      "date": "2027-08-16"
+     }
+    ],
+    "citation": {
+     "source_type": "catalogue",
+     "title": "Program catalogue 2027-28: M.Tech Computer Science and Engineering",
+     "academic_year": "2027-28"
+    }
+   },
+   {
+    "id": "4fd1aefa-a5a6-5940-96ef-cae17b584c28",
+    "code": "MBA",
+    "name": "Master of Business Administration",
+    "aliases": [
+     "MBA",
+     "PGDM"
+    ],
+    "department": "Management",
+    "level": "PG",
+    "duration_months": 24,
+    "intake": 60,
+    "eligibility": "Any bachelor's degree with at least 50% and a valid CAT, MAT or PGCET score",
+    "contact": "admissions@demo-college.example",
+    "academic_year": "2027-28",
+    "fees": [
+     {
+      "category": "general",
+      "component": "tuition",
+      "amount": 300000,
+      "currency": "INR",
+      "period": "per year",
+      "valid_from": null,
+      "valid_to": null
+     },
+     {
+      "category": "general",
+      "component": "hostel",
+      "amount": 90000,
+      "currency": "INR",
+      "period": "per year",
+      "valid_from": null,
+      "valid_to": null
+     },
+     {
+      "category": "general",
+      "component": "application",
+      "amount": 1500,
+      "currency": "INR",
+      "period": "one time",
+      "valid_from": null,
+      "valid_to": null
+     }
+    ],
+    "dates": [
+     {
+      "label": "Applications open",
+      "date": "2027-01-15"
+     },
+     {
+      "label": "Group discussion and interview",
+      "date": "2027-05-22"
+     },
+     {
+      "label": "Last date to apply",
+      "date": "2027-06-30"
+     },
+     {
+      "label": "First counselling round",
+      "date": "2027-07-12"
+     },
+     {
+      "label": "Classes begin",
+      "date": "2027-08-16"
+     }
+    ],
+    "citation": {
+     "source_type": "catalogue",
+     "title": "Program catalogue 2027-28: Master of Business Administration",
+     "academic_year": "2027-28"
+    }
+   }
+  ],
+  "general_dates": [
+   {
+    "label": "Applications open",
+    "date": "2027-01-15",
+    "academic_year": "2027-28"
+   },
+   {
+    "label": "Last date to apply",
+    "date": "2027-06-30",
+    "academic_year": "2027-28"
+   },
+   {
+    "label": "First counselling round",
+    "date": "2027-07-12",
+    "academic_year": "2027-28"
+   },
+   {
+    "label": "Classes begin",
+    "date": "2027-08-16",
+    "academic_year": "2027-28"
+   }
+  ]
+ },
+ "passages": [
+  {
+   "id": "03cb0fba-273c-5283-8029-445d2bf07171",
+   "kind": "curated_qa",
+   "content": "Q: Is there a hostel for first-year students?\nA: Yes. There are separate hostels for men and women on campus, and first-year students share triple rooms. Rooms are allotted after admission on a first-come basis.",
+   "keywords": "Do freshers get hostel Is hostel available",
+   "citation": {
+    "source_type": "curated_qa",
+    "document_id": null,
+    "qa_id": "03cb0fba-273c-5283-8029-445d2bf07171",
+    "title": "Is there a hostel for first-year students?",
+    "heading_path": "Hostel",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": null,
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "ccbafbe8-8bc5-56a1-aab7-3c8cc4c1436c",
+   "kind": "curated_qa",
+   "content": "Q: What is the last date to apply?\nA: Applications for 2027-28 close on 30 June 2027. Apply online on the admissions portal.",
+   "keywords": "Application deadline When do applications close",
+   "citation": {
+    "source_type": "curated_qa",
+    "document_id": null,
+    "qa_id": "ccbafbe8-8bc5-56a1-aab7-3c8cc4c1436c",
+    "title": "What is the last date to apply?",
+    "heading_path": "Dates",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": null,
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "7dca3c4d-6d41-5700-b651-f4bd483588b5",
+   "kind": "curated_qa",
+   "content": "Q: Can diploma holders join B.Tech?\nA: Yes. Diploma holders with at least 45% marks in a related branch can join B.Tech directly in the second year through the state lateral-entry test.",
+   "keywords": "Lateral entry Direct second year admission",
+   "citation": {
+    "source_type": "curated_qa",
+    "document_id": null,
+    "qa_id": "7dca3c4d-6d41-5700-b651-f4bd483588b5",
+    "title": "Can diploma holders join B.Tech?",
+    "heading_path": "Admission process",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": null,
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "904a3b4b-e357-5c1c-9408-7a658d669140",
+   "kind": "curated_qa",
+   "content": "Q: Does the college help with education loans?\nA: Yes. The college has tie-ups with partner banks, and the admissions office issues the fee structure letter and bonafide certificate the bank needs.",
+   "keywords": "Bank loan for fees Loan assistance",
+   "citation": {
+    "source_type": "curated_qa",
+    "document_id": null,
+    "qa_id": "904a3b4b-e357-5c1c-9408-7a658d669140",
+    "title": "Does the college help with education loans?",
+    "heading_path": "Fees",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": null,
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "0004f1ca-651d-5731-a0f1-06ebd4c51bce",
+   "kind": "curated_qa",
+   "content": "Q: Which electives can CSE students take?\nA: From the fifth semester, CSE students can choose electives in machine learning, deep learning, natural language processing, cloud computing, cyber security, blockchain and the internet of things, and may take a minor in data science.",
+   "keywords": "AI electives in CSE Can I study machine learning in CSE",
+   "citation": {
+    "source_type": "curated_qa",
+    "document_id": null,
+    "qa_id": "0004f1ca-651d-5731-a0f1-06ebd4c51bce",
+    "title": "Which electives can CSE students take?",
+    "heading_path": "Curriculum",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": "Computer Science",
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "c161705b-6f4b-56cc-99c4-34560b10471b",
+   "kind": "curated_qa",
+   "content": "Q: Is food included in the hostel fee?\nA: Yes. The mess serves breakfast, lunch, evening snacks and dinner, with vegetarian and non-vegetarian food, and the mess charge is included in the hostel fee.",
+   "keywords": "Hostel mess charges",
+   "citation": {
+    "source_type": "curated_qa",
+    "document_id": null,
+    "qa_id": "c161705b-6f4b-56cc-99c4-34560b10471b",
+    "title": "Is food included in the hostel fee?",
+    "heading_path": "Hostel",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": null,
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "0c3c9770-dccb-5480-8cba-2831763aa4e0",
+   "kind": "chunk",
+   "content": "Demo College of Engineering is a private engineering college affiliated to the state technical university. The campus is 40 acres and has separate academic, hostel and sports blocks.",
+   "keywords": "",
+   "citation": {
+    "source_type": "document",
+    "document_id": "d616b619-a24e-582b-b0bc-03817e3491f2",
+    "qa_id": null,
+    "title": "Prospectus 2027-28",
+    "heading_path": "About the college",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": null,
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "e8fdfdea-74db-5403-8dd4-0ee28cf9447c",
+   "kind": "chunk",
+   "content": "Undergraduate: B.Tech in Computer Science and Engineering, Mechanical Engineering and Civil Engineering. Each B.Tech programme runs for four years (eight semesters).\n\nPostgraduate: M.Tech in Computer Science and Engineering (two years) and MBA (two years).",
+   "keywords": "",
+   "citation": {
+    "source_type": "document",
+    "document_id": "d616b619-a24e-582b-b0bc-03817e3491f2",
+    "qa_id": null,
+    "title": "Prospectus 2027-28",
+    "heading_path": "Programmes offered",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": null,
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "d53fb775-342e-5158-8a4d-e4bb682a0a33",
+   "kind": "chunk",
+   "content": "For B.Tech, candidates must have passed 10+2 with Physics, Chemistry and Mathematics with at least 50% marks (45% for reserved categories) and hold a valid rank in the state entrance test or JEE Main.\n\nFor M.Tech, a B.E. or B.Tech in a related branch with at least 50% is required; a GATE score is preferred. For the MBA, any bachelor's degree with at least 50% and a valid CAT, MAT or PGCET score is required.",
+   "keywords": "",
+   "citation": {
+    "source_type": "document",
+    "document_id": "d616b619-a24e-582b-b0bc-03817e3491f2",
+    "qa_id": null,
+    "title": "Prospectus 2027-28",
+    "heading_path": "Eligibility",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": null,
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "f36a0156-b93a-5976-93a1-1890f5ba0de3",
+   "kind": "chunk",
+   "content": "Diploma holders with at least 45% marks in a related branch can join the B.Tech programme directly in the second year (third semester) through the state lateral-entry test. Seats are limited to 10% of the intake.",
+   "keywords": "",
+   "citation": {
+    "source_type": "document",
+    "document_id": "d616b619-a24e-582b-b0bc-03817e3491f2",
+    "qa_id": null,
+    "title": "Prospectus 2027-28",
+    "heading_path": "Lateral entry",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": null,
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "9e9d1a16-c3e4-5101-b8f4-681ccd7d455f",
+   "kind": "chunk",
+   "content": "1. Apply online on the admissions portal and pay the application fee.\n2. Upload your marks cards, entrance test rank card, transfer certificate and a photo ID.\n3. Attend counselling on the date given in your admission letter.\n4. Pay the first-year fee within seven days of the seat allotment to confirm your seat.\n\nYou receive an e-mail at each step. Original documents are verified at the time of joining.",
+   "keywords": "",
+   "citation": {
+    "source_type": "document",
+    "document_id": "d616b619-a24e-582b-b0bc-03817e3491f2",
+    "qa_id": null,
+    "title": "Prospectus 2027-28",
+    "heading_path": "Admission process",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": null,
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "6de55090-e666-5317-8258-16fdaf2edd1a",
+   "kind": "chunk",
+   "content": "Class 10 and Class 12 marks cards, entrance test rank card, transfer certificate, migration certificate (for students from other boards), category certificate if applicable, Aadhaar card and four passport-size photographs.",
+   "keywords": "",
+   "citation": {
+    "source_type": "document",
+    "document_id": "d616b619-a24e-582b-b0bc-03817e3491f2",
+    "qa_id": null,
+    "title": "Prospectus 2027-28",
+    "heading_path": "Documents required",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": null,
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "1505f7fb-e6b1-59e4-b4fd-bd02f40dcfc8",
+   "kind": "chunk",
+   "content": "Merit scholarships cover part of the tuition fee for students with high entrance test ranks. Need-based fee concessions are available for families with an annual income below the limit set by the scholarship committee. Students can also apply for state and central government scholarships through the National Scholarship Portal; the scholarship cell helps with the application.",
+   "keywords": "",
+   "citation": {
+    "source_type": "document",
+    "document_id": "d616b619-a24e-582b-b0bc-03817e3491f2",
+    "qa_id": null,
+    "title": "Prospectus 2027-28",
+    "heading_path": "Scholarships",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": null,
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "263038b0-a092-58de-a488-72fc434281ee",
+   "kind": "chunk",
+   "content": "The college has tie-ups with partner banks for education loans. The admissions office issues the fee structure letter and bonafide certificate the bank needs.",
+   "keywords": "",
+   "citation": {
+    "source_type": "document",
+    "document_id": "d616b619-a24e-582b-b0bc-03817e3491f2",
+    "qa_id": null,
+    "title": "Prospectus 2027-28",
+    "heading_path": "Education loans",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": null,
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "b223ab05-5494-5028-b0e0-300b7e963ad1",
+   "kind": "chunk",
+   "content": "Separate hostels for men and women are available on campus. Rooms are allotted after admission on a first-come basis. College buses run on 12 routes across the city.",
+   "keywords": "",
+   "citation": {
+    "source_type": "document",
+    "document_id": "d616b619-a24e-582b-b0bc-03817e3491f2",
+    "qa_id": null,
+    "title": "Prospectus 2027-28",
+    "heading_path": "Hostel and transport",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": null,
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "b6bb00f3-198e-544b-a03e-adcfb9a56417",
+   "kind": "chunk",
+   "content": "The training and placement cell runs aptitude and interview training from the third year. Recruiters from IT services, product, core engineering and consulting companies visit the campus every year.",
+   "keywords": "",
+   "citation": {
+    "source_type": "document",
+    "document_id": "d616b619-a24e-582b-b0bc-03817e3491f2",
+    "qa_id": null,
+    "title": "Prospectus 2027-28",
+    "heading_path": "Placements",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": null,
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "e0241b28-f24e-5c0d-9dcb-9379c5342118",
+   "kind": "chunk",
+   "content": "Refunds on cancellation of admission follow the state university's refund rules. Requests are handled by the admissions office, not by the online assistant.",
+   "keywords": "",
+   "citation": {
+    "source_type": "document",
+    "document_id": "d616b619-a24e-582b-b0bc-03817e3491f2",
+    "qa_id": null,
+    "title": "Prospectus 2027-28",
+    "heading_path": "Refunds and cancellations",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": null,
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "26fb07cd-01e6-5956-abe1-81182e1b6568",
+   "kind": "chunk",
+   "content": "Admissions office, Demo College of Engineering. Office hours: Monday to Saturday, 09:00 to 17:00. E-mail: admissions@demo-college.example.",
+   "keywords": "",
+   "citation": {
+    "source_type": "document",
+    "document_id": "d616b619-a24e-582b-b0bc-03817e3491f2",
+    "qa_id": null,
+    "title": "Prospectus 2027-28",
+    "heading_path": "Contact",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": null,
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "8015abd2-d19e-5600-9af6-9b8d823f7aba",
+   "kind": "chunk",
+   "content": "The programme has 160 credits over eight semesters. The first year covers mathematics, physics, programming in C and Python, and engineering drawing.",
+   "keywords": "",
+   "citation": {
+    "source_type": "document",
+    "document_id": "ab49ed87-acca-585b-9ae7-70b4164b5891",
+    "qa_id": null,
+    "title": "B.Tech CSE curriculum 2027-28",
+    "heading_path": "Structure",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": "Computer Science",
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "b20c64e9-e893-5bc2-b43d-67b5fb708ec7",
+   "kind": "chunk",
+   "content": "Data structures, algorithms, discrete mathematics, computer organisation, operating systems, database management systems, computer networks, theory of computation, compiler design and software engineering.",
+   "keywords": "",
+   "citation": {
+    "source_type": "document",
+    "document_id": "ab49ed87-acca-585b-9ae7-70b4164b5891",
+    "qa_id": null,
+    "title": "B.Tech CSE curriculum 2027-28",
+    "heading_path": "Core subjects",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": "Computer Science",
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "54f8dc02-b1ff-56cd-a265-b4294a29829c",
+   "kind": "chunk",
+   "content": "From the fifth semester students choose electives in machine learning, deep learning, natural language processing, cloud computing, cyber security, blockchain and the internet of things. Students may take a minor in data science.",
+   "keywords": "",
+   "citation": {
+    "source_type": "document",
+    "document_id": "ab49ed87-acca-585b-9ae7-70b4164b5891",
+    "qa_id": null,
+    "title": "B.Tech CSE curriculum 2027-28",
+    "heading_path": "Electives",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": "Computer Science",
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "11859cbf-17bf-558f-95c8-331d855311c1",
+   "kind": "chunk",
+   "content": "The department has a programming lab, a networks lab, an AI and machine learning lab with GPU workstations, and an IoT lab. Labs are open until 20:00 on weekdays.",
+   "keywords": "",
+   "citation": {
+    "source_type": "document",
+    "document_id": "ab49ed87-acca-585b-9ae7-70b4164b5891",
+    "qa_id": null,
+    "title": "B.Tech CSE curriculum 2027-28",
+    "heading_path": "Labs",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": "Computer Science",
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "26c6bff5-9434-5ed2-b534-5c4bb5804473",
+   "kind": "chunk",
+   "content": "Students complete a mini project in the sixth semester and a major project in the eighth semester. An internship of at least eight weeks is required before the final year.",
+   "keywords": "",
+   "citation": {
+    "source_type": "document",
+    "document_id": "ab49ed87-acca-585b-9ae7-70b4164b5891",
+    "qa_id": null,
+    "title": "B.Tech CSE curriculum 2027-28",
+    "heading_path": "Projects and internships",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": "Computer Science",
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "b3ea1035-34d7-52a5-8acf-a87f67815377",
+   "kind": "chunk",
+   "content": "Graduates work as software engineers, data analysts, machine learning engineers and network engineers, or go on to M.Tech, MS or MBA programmes. The department helps with GATE and GRE preparation.",
+   "keywords": "",
+   "citation": {
+    "source_type": "document",
+    "document_id": "ab49ed87-acca-585b-9ae7-70b4164b5891",
+    "qa_id": null,
+    "title": "B.Tech CSE curriculum 2027-28",
+    "heading_path": "Higher studies and careers",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": "Computer Science",
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "e4633b48-fe1b-55fa-bb27-2825887a0c8b",
+   "kind": "chunk",
+   "content": "Engineering mechanics, thermodynamics, fluid mechanics, strength of materials, manufacturing processes, machine design, heat transfer and dynamics of machinery.",
+   "keywords": "",
+   "citation": {
+    "source_type": "document",
+    "document_id": "813cc23d-1e75-5a82-a6f5-05d401ea502d",
+    "qa_id": null,
+    "title": "B.Tech Mechanical curriculum 2027-28",
+    "heading_path": "Core subjects",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": "Mechanical",
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "90e73836-dceb-5411-8312-93fef2b1a223",
+   "kind": "chunk",
+   "content": "Electives include automobile engineering, robotics, additive manufacturing, renewable energy systems and finite element analysis.",
+   "keywords": "",
+   "citation": {
+    "source_type": "document",
+    "document_id": "813cc23d-1e75-5a82-a6f5-05d401ea502d",
+    "qa_id": null,
+    "title": "B.Tech Mechanical curriculum 2027-28",
+    "heading_path": "Electives",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": "Mechanical",
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "a02b1f57-1edf-52b9-ac44-6eadac2a33a4",
+   "kind": "chunk",
+   "content": "The department has a central workshop with lathe, milling and welding sections, a CNC lab, a thermal engineering lab and a 3D printing lab. Workshop sessions run from 09:00 to 13:00.",
+   "keywords": "",
+   "citation": {
+    "source_type": "document",
+    "document_id": "813cc23d-1e75-5a82-a6f5-05d401ea502d",
+    "qa_id": null,
+    "title": "B.Tech Mechanical curriculum 2027-28",
+    "heading_path": "Labs and workshop",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": "Mechanical",
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "84632c35-02ae-520e-9b0a-9f6c4d64e49f",
+   "kind": "chunk",
+   "content": "Graduates work in automotive, manufacturing, energy and design companies, or continue to M.Tech or MS programmes.",
+   "keywords": "",
+   "citation": {
+    "source_type": "document",
+    "document_id": "813cc23d-1e75-5a82-a6f5-05d401ea502d",
+    "qa_id": null,
+    "title": "B.Tech Mechanical curriculum 2027-28",
+    "heading_path": "Careers",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": "Mechanical",
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "436c1e65-d33b-51e2-bcca-6357d52cc95c",
+   "kind": "chunk",
+   "content": "First-year students share triple rooms; senior students may apply for double rooms. Every room has a bed, study table, chair and wardrobe for each student. Wi-Fi is available in all hostel blocks.",
+   "keywords": "",
+   "citation": {
+    "source_type": "document",
+    "document_id": "3e85cff5-a678-5c4b-904c-753d31abd43d",
+    "qa_id": null,
+    "title": "Hostel rules 2027-28",
+    "heading_path": "Rooms",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": null,
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "7aa8361c-7da1-5602-8a1f-330c1a0cefb0",
+   "kind": "chunk",
+   "content": "The hostel mess serves breakfast, lunch, evening snacks and dinner. Vegetarian and non-vegetarian food is available. The mess charge is included in the hostel fee.",
+   "keywords": "",
+   "citation": {
+    "source_type": "document",
+    "document_id": "3e85cff5-a678-5c4b-904c-753d31abd43d",
+    "qa_id": null,
+    "title": "Hostel rules 2027-28",
+    "heading_path": "Mess",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": null,
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "a43d7018-92e5-5f60-bca6-35974cb939fa",
+   "kind": "chunk",
+   "content": "Hostel gates close at 21:30. Wardens live on campus, and security staff and CCTV cover every block around the clock. Visitors are allowed in the visitors' room between 16:00 and 19:00.",
+   "keywords": "",
+   "citation": {
+    "source_type": "document",
+    "document_id": "3e85cff5-a678-5c4b-904c-753d31abd43d",
+    "qa_id": null,
+    "title": "Hostel rules 2027-28",
+    "heading_path": "Timings and safety",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": null,
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  },
+  {
+   "id": "69a18bde-8580-547c-bc8e-b2343953c6cc",
+   "kind": "chunk",
+   "content": "A doctor visits the campus health centre every day, and an ambulance is available at all times.",
+   "keywords": "",
+   "citation": {
+    "source_type": "document",
+    "document_id": "3e85cff5-a678-5c4b-904c-753d31abd43d",
+    "qa_id": null,
+    "title": "Hostel rules 2027-28",
+    "heading_path": "Medical care",
+    "page": null,
+    "academic_year": "2027-28",
+    "department": null,
+    "valid_to": "2028-07-31",
+    "url": null
+   }
+  }
+ ]
+}

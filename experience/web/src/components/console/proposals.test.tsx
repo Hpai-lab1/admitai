@@ -6,6 +6,7 @@ import {
   canApproveAgain,
   escalationText,
   needsAnswer,
+  sortInbox,
   type Proposal,
 } from "./proposals";
 
@@ -64,5 +65,38 @@ describe("escalationText", () => {
     expect(escalationText({ ...base, escalation_level: 2 })).toBe("Escalated to the College Admin");
     // older Module A replies carry only `escalated`
     expect(escalationText({ ...base, escalated: true })).toBe("Escalated to the College Admin");
+  });
+});
+
+describe("approval inbox order", () => {
+  const p = (id: string, impact: number, at: string) =>
+    ({
+      id,
+      impact_score: impact,
+      last_activity_at: at,
+      title: id,
+      kind: "x",
+      proposal: "",
+      department: null,
+    }) as Proposal;
+  const items = [p("old-big", 90, "2026-11-08T10:00:00Z"), p("new-small", 10, "2026-11-10T09:00:00Z")];
+
+  it("puts the newest first by default, and the biggest impact first on request", () => {
+    expect(sortInbox(items, "newest").map((x) => x.id)).toEqual(["new-small", "old-big"]);
+    expect(sortInbox(items, "impact").map((x) => x.id)).toEqual(["old-big", "new-small"]);
+  });
+});
+
+describe("decisionLabel", () => {
+  it("tells an urgent fix apart from a normal approval", async () => {
+    const { decisionLabel } = await import("./proposals");
+    const base = { id: "p", kind: "curated_answer", title: "t" } as Parameters<typeof decisionLabel>[0];
+    expect(decisionLabel({ ...base, status: "evaluating", published_early: true })).toBe(
+      "live, being tested",
+    );
+    expect(decisionLabel({ ...base, status: "failed_gate", published_early: true, taken_down: true })).toBe(
+      "taken down",
+    );
+    expect(decisionLabel({ ...base, status: "evaluating" })).toBe("evaluating");
   });
 });

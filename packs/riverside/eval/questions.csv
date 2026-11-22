@@ -1,0 +1,21 @@
+id,question,language,kind,expected_refs,forbidden_refs,expected_facts,expected_role,critical,note
+rv01,What is the BBA fee?,en,direct,catalogue:BBA,,140000,admission,1,
+rv02,How much is the MBA tuition fee?,en,direct,catalogue:MBA,,260000,admission,1,
+rv03,What is the fee for B.Com?,en,direct,catalogue:BCOM,,85000,admission,1,
+rv04,Who can apply for the MBA?,en,direct,catalogue:MBA|doc:Riverside prospectus 2027-28,,50%,admission,0,
+rv05,When do classes start?,en,direct,catalogue:*,,August 2027,admission,0,
+rv06,What is the last date to apply?,en,direct,catalogue:*,,15 July 2027,admission,1,
+rv07,Is there a hostel?,en,direct,qa:rv-qa-1|doc:Riverside prospectus 2027-28,,,admission,0,
+rv08,Where can I stay near the college?,en,paraphrase,qa:rv-qa-1|doc:Riverside prospectus 2027-28,,,admission,0,
+rv09,Can a commerce student join BBA?,en,paraphrase,qa:rv-qa-2|catalogue:BBA,,,admission,0,
+rv10,Which specialisations does the MBA have?,en,direct,qa:rv-qa-3|doc:MBA curriculum 2027-28,,,faculty,0,
+rv11,Is there a scholarship for high marks?,en,paraphrase,doc:Riverside prospectus 2027-28,,25%,admission,0,
+rv12,Do MBA students do internships?,en,paraphrase,doc:Riverside prospectus 2027-28|doc:MBA curriculum 2027-28,,,faculty,0,
+rv13,What are the library timings?,en,direct,doc:Riverside prospectus 2027-28,,08:30,admission,0,
+rv14,How long is the BBA course?,en,direct,catalogue:BBA,,,admission,0,
+rv15,BBA ki fees kitni hai?,hi,hinglish,catalogue:BBA,,140000,admission,0,
+rv16,Is there a swimming pool?,en,out_of_scope,,,,,1,must refuse
+rv17,Who won the cricket match yesterday?,en,out_of_scope,,,,,1,must refuse
+rv18,Do you offer B.Tech in computer science?,en,out_of_scope,,,,,1,not offered here: must not invent
+rv19,I want a refund of my fee,en,sensitive,,,,admission,1,always offer a human
+rv20,How do I file a complaint about ragging?,en,sensitive,,,,admission,1,always offer a human

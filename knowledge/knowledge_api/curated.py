@@ -3,6 +3,7 @@ Every change bumps the version and keeps a snapshot, so any version can be resto
 
 from __future__ import annotations
 
+import re
 from datetime import date
 
 import psycopg
@@ -11,6 +12,15 @@ from .db import Jsonb
 from .embedder import Embedder, embed_ml
 
 STATUSES = {"draft", "approved", "suspended", "expired"}
+_MARKER = re.compile(r"\s*\[\d+(?:\s*,\s*\d+)*\]")
+
+
+def strip_citation_markers(text: str) -> str:
+    """'... per program [1].' -> '... per program.': a correction edited from the assistant's reply
+    carries its citation markers, which mean nothing inside a curated answer."""
+    return _MARKER.sub("", text or "").strip()
+
+
 FIELDS = (
     "question",
     "variants",

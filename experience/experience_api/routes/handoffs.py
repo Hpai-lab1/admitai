@@ -15,13 +15,21 @@ from ..clients import assistant_conversation, dispatch_events, handoff_package
 from ..config import Settings
 from ..webhooks import emit, handoff_data
 from ..db import Context, Jsonb, audit, tx
-from ..deps import require_staff, service_context, settings_dep, visitor_context
+from ..deps import (
+    ADMISSION_DESK,
+    DEPARTMENT_ROLES,
+    require_staff,
+    service_context,
+    settings_dep,
+    visitor_context,
+)
 from ..schemas import CallbackAck, CallbackIn, Handoff, HandoffIn, ReplyIn
 
 router = APIRouter(tags=["handoffs"])
-# super_admin is listed but sees rows only during break-glass (RLS, migration 004)
+# super_admin is listed but sees rows only during break-glass (RLS, migration 004); each other
+# role sees its queue: the admission desk the admission queue, department roles their departments.
 QUEUE_STAFF = require_staff(
-    "super_admin", "college_admin", "admission_officer", "faculty"
+    "super_admin", "college_admin", *ADMISSION_DESK, *DEPARTMENT_ROLES
 )
 
 SELECT = """
@@ -324,6 +332,21 @@ def list_handoffs(
 
 
 @router.get(
+    "/handoffs/mine",
+    summary="The widget's handoff banner: your request's status and who claimed it (PRD 13)",
+)
+def my_handoff_status(
+    conversation_id: str = Query(min_length=1, max_length=200),
+    ctx: Context = Depends(visitor_context),
+    settings: Settings = Depends(settings_dep),
+):
+    with tx(settings.database_url, ctx) as cur:
+        cur.execute("select * from app.my_handoff_status(%s)", (conversation_id,))
+        row = cur.fetchone()
+    return dict(row) if row else {"status": "none"}
+
+
+@router.get(
     "/handoffs/{handoff_id}",
     response_model=Handoff,
     summary="One task with its history",
@@ -463,8 +486,41 @@ def reply(
                 "messaged",
                 "Reply queued for WhatsApp (sent through the college's WhatsApp number)",
             )
+        if body.send_sms:
+            lead = row["lead"]
+            phone = messaging.staff_reply_sms(lead)
+            if not phone:
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    "There is no mobile number to text for this applicant (a minor's guardian "
+                    "is reached by e-mail or WhatsApp); please phone or e-mail them",
+                )
+            college = messaging.college_name(cur)
+            messaging.queue(
+                cur,
+                ctx.tenant_id,
+                "staff_reply",
+                "",
+                f"{body.body}\n\n{college} admissions",
+                to=phone,
+                lead_id=lead["id"],
+                handoff_id=handoff_id,
+                channel="sms",
+            )
+            _event(cur, ctx, handoff_id, "messaged", "Reply queued for SMS")
         if body.as_correction:
             ctx_pkg = row["context"] or {}
+            # The question the correction answers: the visitor's last words in the task's
+            # transcript. Without it, Module A could only propose "(question not recorded)",
+            # which no later visitor's question can match.
+            question = next(
+                (
+                    t.get("text")
+                    for t in reversed(ctx_pkg.get("transcript") or [])
+                    if t.get("role") == "user" and t.get("text")
+                ),
+                None,
+            )
             cur.execute(
                 "insert into app.corrections (tenant_id, conversation_id, message_id, original_answer,"
                 " corrected_answer, reason, scope, author_id, trace_id) values (%s, %s, %s, %s, %s, %s, 'general', %s, %s)"
@@ -491,6 +547,7 @@ def reply(
                             "conversation_id": row["conversation_id"],
                             "corrected_answer": body.body,
                             "original_answer": ctx_pkg.get("ai_draft"),
+                            "question": question,
                             "department": row["department"],
                             "trace_id": ctx_pkg.get("trace_id"),
                         }

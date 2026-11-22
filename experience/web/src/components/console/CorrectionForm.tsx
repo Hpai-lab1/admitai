@@ -2,11 +2,19 @@
 
 import { useState } from "react";
 import { ApiError, staff } from "@/lib/api";
+import {
+  CatalogueConflict,
+  type Conflict,
+  type FeeChange,
+  unmatched,
+} from "@/components/console/CatalogueConflict";
 
 type Props = {
   conversationId: string;
   messageId: string;
   originalAnswer?: string | null;
+  /** The visitor's question: names the programme when the answer does not. */
+  question?: string | null;
   traceId?: string | null;
   onDone: (message: string) => void;
   onCancel: () => void;
@@ -18,6 +26,7 @@ export function CorrectionForm({
   conversationId,
   messageId,
   originalAnswer,
+  question,
   traceId,
   onDone,
   onCancel,
@@ -27,6 +36,14 @@ export function CorrectionForm({
   const [scope, setScope] = useState<"general" | "this_answer">("general");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Fees the catalogue disagrees with; checked once per text, then "Send anyway" sends it.
+  const [conflicts, setConflicts] = useState<{
+    text: string;
+    items: Conflict[];
+    changes: FeeChange[];
+  } | null>(null);
+  const blocked =
+    !!conflicts && conflicts.text === answer && unmatched(conflicts.items, conflicts.changes).length > 0;
   const id = messageId.replace(/\W/g, "");
 
   async function submit(e: React.FormEvent) {
@@ -34,6 +51,19 @@ export function CorrectionForm({
     setBusy(true);
     setError(null);
     try {
+      let feeChanges = conflicts?.text === answer ? conflicts.changes : [];
+      if (conflicts?.text !== answer) {
+        const r = await staff<{ conflicts: Conflict[]; fee_changes?: FeeChange[] }>("/catalogue/check", {
+          method: "POST",
+          body: JSON.stringify({ text: `${question ?? ""} ${answer}` }),
+        }).catch(() => ({ conflicts: [] as Conflict[], fee_changes: [] as FeeChange[] }));
+        const changes = r.fee_changes ?? [];
+        feeChanges = changes;
+        setConflicts({ text: answer, items: r.conflicts, changes });
+        // A fee it clearly changes is fine (approval changes the fee list); a figure that would not
+        // reach visitors is shown first, and the next click sends it anyway.
+        if (unmatched(r.conflicts, changes).length) return;
+      }
       await staff("/corrections", {
         method: "POST",
         body: JSON.stringify({
@@ -46,7 +76,11 @@ export function CorrectionForm({
           trace_id: traceId ?? null,
         }),
       });
-      onDone("Correction sent for approval.");
+      onDone(
+        feeChanges.length
+          ? "Correction sent for approval. Once approved and tested, the official fee list changes and visitors are told the new fee."
+          : "Correction sent for approval.",
+      );
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "That didn't work");
     } finally {
@@ -116,9 +150,12 @@ export function CorrectionForm({
           </label>
         </div>
       </fieldset>
+      {conflicts?.text === answer && (
+        <CatalogueConflict conflicts={conflicts.items} changes={conflicts.changes} />
+      )}
       <div className="flex gap-2">
         <button className="btn-primary" disabled={busy || !answer.trim() || !reason.trim()}>
-          Send for approval
+          {blocked ? "Send anyway" : "Send for approval"}
         </button>
         <button type="button" className="btn-ghost" onClick={onCancel}>
           Cancel
