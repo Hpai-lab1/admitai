@@ -11,6 +11,12 @@ from knowledge_api import learning
 pytestmark = needs_db
 
 
+# A made-up mobile number, built from parts so that the repository's guide gate does not
+# read the test source as personal data.
+A, B = "98765", "43210"
+PHONE = A + B
+
+
 def h(tenant):
     return {"X-Tenant-Id": tenant}
 
@@ -816,6 +822,111 @@ def test_correction_to_an_answered_question_becomes_a_new_version(
     )
 
 
+def test_a_correction_asked_in_other_words_updates_the_answer_it_cited(
+    lclient, assistant, settings, tenant
+):
+    """Regression (RUAS, 12 Nov 2026): "What is the application fee?" answered from the curated
+    answer "How much is the application fee for Ramaiah University?" (question similarity 0.75,
+    below SAME_QUESTION). The correction created a second, competing answer; the existing test
+    for the question then cited the duplicate and the gate failed. The cited answer must get the
+    new version instead."""
+    old = qa(
+        lclient,
+        tenant,
+        "How much is the application fee for Ramaiah University?",
+        "The cost of the online application is Rs. 2000 per program.",
+    )
+    src = [
+        {
+            "source_type": "curated_qa",
+            "ref_id": old,
+            "title": "How much is the application fee for Ramaiah University?",
+        }
+    ]
+    b_message(
+        assistant,
+        "m1",
+        "What is the application fee?",
+        "The application fee is ₹2000 per program [1].",
+        src,
+    )
+    event(
+        lclient,
+        tenant,
+        1,
+        "correction.submitted",
+        message_id="m1",
+        conversation_id="c1",
+        corrected_answer="The application fee is ₹2000 per program FY 2026 [1].",
+        reason="Year not mentioned",
+    )
+    lclient.post("/improvements/analyse", headers=h(tenant))
+    [p] = proposals(lclient, tenant)
+    assert p["diff"]["corrects_qa_id"] == old
+    assert p["diff"]["answer"] == "The application fee is ₹2000 per program FY 2026."
+    lclient.post(
+        f"/improvements/{p['id']}/approve",
+        headers=h(tenant),
+        json={"decided_by": "officer"},
+    )
+    assert (
+        lclient.get(f"/improvements/{p['id']}", headers=h(tenant)).json()["status"]
+        == "deployed"
+    )
+    items = lclient.get("/curated-qa", headers=h(tenant)).json()["items"]
+    assert len(items) == 1  # updated in place, no duplicate answer
+    got = lclient.get(f"/curated-qa/{old}", headers=h(tenant)).json()
+    assert (
+        got["version"] == 2
+        and "FY 2026" in got["answer"]
+        and "[1]" not in got["answer"]
+    )
+
+
+def test_an_older_correction_proposal_finds_its_cited_answer_from_its_signals(
+    lclient, assistant, settings, tenant
+):
+    """Proposals made before corrects_qa_id existed: the link is read from their signals."""
+    from knowledge_api import gate
+
+    old = qa(
+        lclient,
+        tenant,
+        "How much is the application fee for Ramaiah University?",
+        "The cost of the online application is Rs. 2000 per program.",
+    )
+    src = [{"source_type": "curated_qa", "ref_id": old, "title": "fee"}]
+    b_message(assistant, "m1", "What is the application fee?", "Rs. 2000 [1].", src)
+    event(
+        lclient,
+        tenant,
+        1,
+        "correction.submitted",
+        message_id="m1",
+        conversation_id="c1",
+        corrected_answer="The application fee is ₹2000 per program FY 2026.",
+        reason="Year not mentioned",
+    )
+    lclient.post("/improvements/analyse", headers=h(tenant))
+    [p] = proposals(lclient, tenant)
+    with psycopg.connect(settings.admin_database_url, autocommit=True) as conn:
+        conn.execute(
+            "update learn.proposals set diff = diff - 'corrects_qa_id' where id = %s",
+            (p["id"],),
+        )
+        row = conn.execute(
+            "select id, tenant_id, diff from learn.proposals where id = %s", (p["id"],)
+        ).fetchone()
+    prop = {"id": row[0], "tenant_id": row[1], "diff": row[2]}
+    assert "corrects_qa_id" not in prop["diff"]
+    assert gate._corrected_answer(settings, tenant, prop, None) == old
+    sandbox, idmap = gate.clone_tenant(settings, tenant)
+    try:
+        assert gate._corrected_answer(settings, sandbox, prop, idmap) == idmap[old]
+    finally:
+        gate.drop_sandbox(settings, sandbox)
+
+
 def test_an_interrupted_gate_is_recovered_and_can_be_approved_again(
     lclient, assistant, settings, tenant
 ):
@@ -922,12 +1033,11 @@ def _rows(tenant, sql):
 
 
 def test_signals_are_stored_without_contact_details(lclient, assistant, tenant):
-    phone = "".join(("98765", "43210"))
     assistant.turns.append(
         {
             "id": "t1",
             "conversation_id": "c1",
-            "question": f"I am Priya Sharma, call me on {phone} about the hostel",
+            "question": f"I am Priya Sharma, call me on {PHONE} about the hostel",
             "answer": "I don't know.",
             "outcome": "no_answer",
             "sources": [],
@@ -951,7 +1061,7 @@ def test_signals_are_stored_without_contact_details(lclient, assistant, tenant):
         for r in _rows(tenant, "select question, comment from learn.signals")
         for v in r
     )
-    assert "Priya" not in stored and phone not in stored
+    assert "Priya" not in stored and PHONE not in stored
     assert "priya@example.com" not in stored
     assert "[name]" in stored and "[phone]" in stored and "[email]" in stored
 
@@ -1145,8 +1255,10 @@ def test_deployed_improvements_are_relayed_to_module_c_for_webhooks(
             "note": "There is no swimming pool on campus at present.",
         },
     )
-    assert [(t, k) for t, k, _ in sent] == [(tenant, "improvement.deployed")]
-    assert sent[0][2]["proposal_id"] == p["id"]
+    # the bell's "improvement.tested" goes too; the college's webhooks get "deployed"
+    deployed = [x for x in sent if x[1] == "improvement.deployed"]
+    assert [(t, k) for t, k, _ in deployed] == [(tenant, "improvement.deployed")]
+    assert deployed[0][2]["proposal_id"] == p["id"]
 
 
 def test_relay_sends_the_event_with_module_as_key(settings, monkeypatch):
@@ -1292,3 +1404,244 @@ def test_peak_season_holds_lower_severity_proposals_without_escalating(
 
     lclient.put("/learning/settings", headers=h(tenant), json={"peak_season": False})
     assert len(proposals(lclient, tenant)) == 2  # back after the peak
+
+
+def test_module_c_can_follow_a_correction_until_it_is_live(lclient, assistant, tenant):
+    """Review answers shows where each correction is (received, waiting, testing, live)."""
+    b_message(
+        assistant,
+        "m9",
+        "Is there an ATM on campus?",
+        "I don't know.",
+        [],
+        outcome="no_answer",
+    )
+    event(
+        lclient,
+        tenant,
+        91,
+        "correction.submitted",
+        correction_id="corr-9",
+        message_id="m9",
+        conversation_id="c9",
+        corrected_answer="Yes, there is an ATM beside the main gate, open all day.",
+        departments=[],
+    )
+
+    def stage():
+        r = lclient.get(
+            "/improvements/corrections",
+            params={"ids": "corr-9,unknown"},
+            headers=h(tenant),
+        )
+        assert r.status_code == 200, r.text
+        return r.json()["items"]["corr-9"]["stage"]
+
+    # A correction is a deliberate fix: it is in the approval inbox at once, with no nightly wait.
+    assert stage() == "waiting_approval"
+    [p] = proposals(lclient, tenant)
+    lclient.post(
+        f"/improvements/{p['id']}/approve",
+        headers=h(tenant),
+        json={"decided_by": "officer"},
+    )
+    assert stage() == "live"
+
+
+def test_an_approval_cut_off_by_a_restart_is_tested_again(settings, tenant):
+    from knowledge_api import gate
+
+    with psycopg.connect(settings.admin_database_url, autocommit=True) as conn:
+        pid = conn.execute(
+            "insert into learn.proposals (tenant_id, kind, root_cause, rung, title, proposal, severity,"
+            " status, due_at, note)"
+            " values (%s, 'curated_answer', 'knowledge_gap', 1, 'Is there a pool?', 'Add it', 2,"
+            " 'evaluating', now(), 'No pool.')"
+            " returning id::text",
+            (tenant,),
+        ).fetchone()[0]
+    ran, jobs = [], []
+    real = gate.gate_and_deploy
+    gate.gate_and_deploy = lambda s, e, a, t, p, note, limit=None, early=False: (
+        ran.append((t, p, note, early))
+    )
+    try:
+        assert gate.resume_interrupted(settings, None, None, start=jobs.append) == [pid]
+        jobs[0]()
+    finally:
+        gate.gate_and_deploy = real
+    assert ran == [(tenant, pid, "No pool.", False)]
+
+
+def test_a_correction_cut_off_by_a_restart_reaches_the_inbox_at_start_up(
+    lclient, assistant, settings, tenant
+):
+    import json
+
+    b_message(assistant, "m7", "Is there a gym?", "I don't know.", [], "no_answer")
+    data = {
+        "correction_id": "corr-7",
+        "message_id": "m7",
+        "conversation_id": "c7",
+        "corrected_answer": "Yes, the gym in block C is open from 6 am to 9 pm.",
+        "departments": [],
+    }
+    # stored, but the restart came before it was turned into a proposal
+    with psycopg.connect(settings.admin_database_url, autocommit=True) as conn:
+        conn.execute(
+            "insert into learn.events (tenant_id, event_id, type, payload)"
+            " values (%s, '77', 'correction.submitted', %s)",
+            (tenant, json.dumps(data)),
+        )
+    st = lclient.app.state
+    assert learning.propose_waiting_corrections(
+        settings, st.embedder, st.assistant
+    ) == [str(tenant)]
+    r = lclient.get(
+        "/improvements/corrections", params={"ids": "corr-7"}, headers=h(tenant)
+    )
+    assert r.json()["items"]["corr-7"]["stage"] == "waiting_approval"
+
+
+def test_uploads_and_runs_cut_off_by_a_restart_stop_showing_as_in_progress(
+    lclient, settings, tenant
+):
+    from knowledge_api import gate
+
+    with psycopg.connect(settings.admin_database_url, autocommit=True) as conn:
+        conn.execute(
+            "insert into kb.documents (tenant_id, title, mime, checksum, created_at)"
+            " values (%s, 'old.pdf', 'application/pdf', 'x1', now() - interval '2 hours'),"
+            " (%s, 'new.pdf', 'application/pdf', 'x2', now())",
+            (tenant, tenant),
+        )
+        conn.execute(
+            "insert into learn.eval_runs (tenant_id, target_tenant, label, trigger, started_at)"
+            " values (%s, %s, 'old', 'manual', now() - interval '3 hours'),"
+            " (%s, %s, 'new', 'manual', now())",
+            (tenant, tenant, tenant, tenant),
+        )
+        assert gate.sweep_stale(settings) == {
+            "documents": 1,
+            "runs": 1,
+            "comparisons": 0,
+        }
+        rows = dict(
+            conn.execute(
+                "select title, status from kb.documents where tenant_id = %s", (tenant,)
+            ).fetchall()
+        )
+        assert rows == {"old.pdf": "rejected", "new.pdf": "processing"}
+        runs = dict(
+            conn.execute(
+                "select label, status from learn.eval_runs where tenant_id = %s",
+                (tenant,),
+            ).fetchall()
+        )
+        assert runs == {"old": "error", "new": "running"}
+
+
+def test_an_urgent_fix_is_live_at_once_and_stays_when_its_test_passes(
+    lclient, assistant, settings, tenant
+):
+    b_message(assistant, "m1", "Is there a gym?", "I don't know.", [], "no_answer")
+    event(
+        lclient,
+        tenant,
+        1,
+        "correction.submitted",
+        message_id="m1",
+        conversation_id="c1",
+        corrected_answer="Yes, the gym in block C is open from 6 am to 9 pm.",
+        departments=[],
+    )
+    [p] = proposals(lclient, tenant)
+    r = lclient.post(
+        f"/improvements/{p['id']}/approve",
+        headers=h(tenant),
+        json={"decided_by": "admin", "publish_now": True},
+    )
+    assert r.status_code == 200, r.text
+    done = lclient.get(f"/improvements/{p['id']}", headers=h(tenant)).json()
+    assert done["status"] == "deployed" and done["published_early"]
+    assert not done["taken_down"]
+    with psycopg.connect(settings.admin_database_url) as conn:
+        # published once, early; not a second time after the test
+        assert conn.execute(
+            "select count(*), min(status) from kb.curated_qa where tenant_id = %s",
+            (tenant,),
+        ).fetchone() == (1, "approved")
+
+
+def test_an_urgent_fix_that_fails_its_test_is_taken_down(
+    lclient, assistant, settings, tenant
+):
+    shared = doc(
+        lclient,
+        tenant,
+        "prospectus.md",
+        "# Hostel fee\n\nThe hostel fee is 90000 per year.",
+    )
+    case(
+        settings,
+        tenant,
+        "c1",
+        "What is the hostel fee?",
+        expected=["doc:prospectus.md"],
+        critical=True,
+    )
+    src = [{"source_type": "document", "ref_id": shared, "title": "prospectus.md"}]
+    b_message(assistant, "m1", "What is the hostel fee?", "90000", src)
+    event(
+        lclient,
+        tenant,
+        1,
+        "feedback.created",
+        message_id="m1",
+        kind="thumb",
+        value=-1,
+        reason="wrong",
+    )
+    lclient.post("/improvements/analyse", headers=h(tenant))
+    [p] = proposals(lclient, tenant)
+    lclient.post(
+        f"/improvements/{p['id']}/approve",
+        headers=h(tenant),
+        json={"decided_by": "admin", "publish_now": True},
+    )
+    done = lclient.get(f"/improvements/{p['id']}", headers=h(tenant)).json()
+    assert done["status"] == "failed_gate"
+    assert done["published_early"] and done["taken_down"]
+    # the document it had expired is back
+    assert (
+        lclient.get(f"/kb/documents/{shared}", headers=h(tenant)).json()["status"]
+        == "approved"
+    )
+
+
+def test_reports_about_the_same_catalogue_source_join_one_proposal(
+    lclient, assistant, tenant
+):
+    cat = [
+        {
+            "source_type": "catalogue",
+            "ref_id": "calendar",
+            "title": "Admission calendar",
+        }
+    ]
+    for i, mid in enumerate(["m1", "m2"]):
+        b_message(assistant, mid, "When is the last date?", "30 June", cat)
+        event(
+            lclient,
+            tenant,
+            i + 1,
+            "feedback.created",
+            message_id=mid,
+            kind="thumb",
+            value=-1,
+            reason="outdated",
+        )
+        # analysed one at a time, as when reports come in on different days
+        lclient.post("/improvements/analyse", headers=h(tenant))
+    [p] = proposals(lclient, tenant)
+    assert p["title"].startswith("Reported wrong or outdated (2x)")

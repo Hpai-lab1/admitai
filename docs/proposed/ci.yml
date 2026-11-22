@@ -1,0 +1,112 @@
+# PROPOSED replacement for .github/workflows/ci.yml (19 Nov 2026). Not active here: .github/ is
+# changed only through a pull request reviewed by the guide (CLAUDE.md). Copy it over in that PR.
+# Why: CI had no database, so all 20 *_db test files skipped and a change that broke the engine
+# could merge with a green build; the web app (tsc, eslint, vitest) was not checked at all.
+# Checked locally: the YAML parses and experience/db/bootstrap_role.sql runs on an empty database.
+# Not yet run on GitHub. assistant/tests/test_engine_db.py used to exhaust memory: every test app
+# preloaded the Whisper and Piper models (VOICE_PRELOAD=1 from local.secrets.sh). Fixed in
+# assistant/tests/conftest.py (voice_preload=False, no real provider keys in tests).
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Read-only token: this workflow never writes to the repository.
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    # GitHub-hosted runner only. Never use a self-hosted runner on this public repository.
+    runs-on: ubuntu-22.04
+    # A throw-away PostgreSQL with pgvector, so the database tests run instead of skipping
+    # (until 19 Nov 2026 all 20 *_db test files skipped in CI). Trust authentication is local to
+    # this job's container; nothing else can reach it.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg14
+        env:
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: host=127.0.0.1 port=5432 dbname=admitai_test user=admitai_app
+      TEST_ADMIN_DATABASE_URL: host=127.0.0.1 port=5432 dbname=admitai_test user=postgres
+      KB_TEST_DATABASE_URL: host=127.0.0.1 port=5432 dbname=admitai_test user=admitai_kb
+      KB_TEST_ADMIN_DATABASE_URL: host=127.0.0.1 port=5432 dbname=admitai_test user=postgres
+      CHAT_TEST_DATABASE_URL: host=127.0.0.1 port=5432 dbname=admitai_test user=admitai_chat
+      CHAT_TEST_ADMIN_DATABASE_URL: host=127.0.0.1 port=5432 dbname=admitai_test user=postgres
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Pre-commit (format, lint, secret scan)
+        run: |
+          pip install pre-commit
+          SKIP=no-commit-to-branch pre-commit run --all-files
+
+      - name: Validate contracts parse
+        run: |
+          pip install pyyaml
+          python -c "import glob, yaml; [yaml.safe_load(open(f, encoding='utf-8')) for f in glob.glob('contracts/*.yaml')]; print('contracts ok')"
+
+      - name: Test database (roles as on a real server)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client tesseract-ocr >/dev/null
+          psql "host=127.0.0.1 port=5432 user=postgres dbname=postgres" -c "create database admitai_test"
+          psql "host=127.0.0.1 port=5432 user=postgres dbname=admitai_test" -f experience/db/bootstrap_role.sql
+
+      - name: Python dependencies
+        run: |
+          for req in */requirements*.txt; do [ -f "$req" ] && pip install -r "$req"; done
+          pip install pytest
+
+      # One module at a time, as on a developer's laptop: each has its own conftest and schema.
+      - name: Module A tests (knowledge)
+        working-directory: knowledge
+        run: pytest -q -rs
+
+      - name: Module B tests (assistant)
+        working-directory: assistant
+        run: pytest -q -rs
+
+      - name: Module C tests (experience)
+        working-directory: experience
+        run: pytest -q -rs
+
+  web:
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: experience/web
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: experience/web/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npx eslint src
+
+      - name: Unit tests
+        run: npx vitest run

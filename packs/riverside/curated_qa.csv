@@ -1,0 +1,4 @@
+external_ref,question,variants,answer,category,owner_role,department,academic_year,valid_to,status
+rv-qa-1,Is there a hostel?,Do you have hostel accommodation|Where can I stay,"No, Riverside College has no hostel. The college office keeps a list of nearby paying-guest accommodation.",Hostel,admission_officer,,2027-28,2028-07-31,approved
+rv-qa-2,Can I join BBA after Class 12 commerce?,BBA eligibility for commerce students,"Yes. BBA is open to Class 12 students from any stream with at least 50%.",Eligibility,admission_officer,,2027-28,2028-07-31,approved
+rv-qa-3,Which MBA specialisations are offered?,MBA electives|MBA streams,"In the second year MBA students specialise in finance, marketing, human resources or business analytics.",Curriculum,faculty,Management,2027-28,2028-07-31,approved

@@ -8,7 +8,7 @@ import { Badge, Loading, Notice, bandTone, useApi } from "@/components/console/u
 import { useMe } from "@/components/console/Shell";
 import { ApiError, staff } from "@/lib/api";
 import { shortDate, slaText } from "@/lib/time";
-import { type Handoff, replyEmail, replyWhatsapp } from "@/lib/types";
+import { type Handoff, replyEmail, replyWhatsapp, replySms } from "@/lib/types";
 
 export default function HandoffDetail() {
   const { id } = useParams<{ id: string }>();
@@ -18,6 +18,7 @@ export default function HandoffDetail() {
   const [asCorrection, setAsCorrection] = useState(true);
   const [sendEmail, setSendEmail] = useState(false);
   const [sendWhatsapp, setSendWhatsapp] = useState(false);
+  const [sendSms, setSendSms] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [correcting, setCorrecting] = useState(false);
@@ -47,19 +48,46 @@ export default function HandoffDetail() {
   const mineOrFree = !h.assigned_to || h.assigned_to === me.id;
   const emailTo = replyEmail(lead);
   const whatsappTo = replyWhatsapp(lead);
+  // Offer SMS only when the server can send it; say plainly when e-mail will wait for a server.
+  const smsTo = me.channels?.sms ? replySms(lead) : null;
+  const emailWaits = me.channels?.email === false;
 
   return (
     <>
-      <Link href="/console" className="text-sm font-semibold text-brand hover:underline">
-        ← Back to queue
+      <Link href="/console" className="text-sm text-muted hover:text-ink hover:underline">
+        ← Queue
       </Link>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <h1 className="mr-auto text-2xl font-extrabold text-accent">{h.reason}</h1>
-        <Badge>{h.department ?? "Admissions"}</Badge>
-        <Badge tone={h.status === "resolved" ? "green" : h.status === "claimed" ? "amber" : "brand"}>
-          {h.status}
-        </Badge>
-        {h.status !== "resolved" && <Badge tone={sla.overdue ? "red" : "green"}>{sla.text}</Badge>}
+      <div className="mt-2 flex flex-wrap items-start gap-3 border-b border-line pb-4">
+        <div className="mr-auto min-w-0">
+          <h1 className="text-xl font-semibold tracking-tight text-ink">{h.reason}</h1>
+          <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">
+            <span>{h.department ?? "Admissions"}</span>
+            <span aria-hidden>·</span>
+            <span>
+              {h.status === "resolved"
+                ? "Resolved"
+                : h.status === "claimed"
+                  ? `With ${h.assigned_to === me.id ? "you" : (h.assigned_name ?? "someone")}`
+                  : "Unclaimed"}
+            </span>
+            {h.status !== "resolved" && (
+              <>
+                <span aria-hidden>·</span>
+                <span className={sla.overdue ? "font-semibold text-danger" : ""}>{sla.text}</span>
+              </>
+            )}
+          </p>
+        </div>
+        {/* Claim first: the task is yours before you call or reply. */}
+        {h.status === "open" && (
+          <button
+            className="btn-primary"
+            disabled={busy}
+            onClick={() => void act("claim", undefined, "You own this task now.")}
+          >
+            Claim
+          </button>
+        )}
       </div>
       {msg && (
         <div className="mt-4">
@@ -70,7 +98,7 @@ export default function HandoffDetail() {
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <section className="space-y-6 lg:col-span-2">
           <div className="card p-5">
-            <h2 className="mb-3 font-bold">Conversation</h2>
+            <h2 className="mb-3 text-base font-semibold">Conversation</h2>
             {transcript.length === 0 ? (
               <p className="text-sm text-muted">No transcript was attached.</p>
             ) : (
@@ -118,14 +146,14 @@ export default function HandoffDetail() {
                   }}
                 />
               ) : (
-                <button className="btn-secondary mt-3" onClick={() => setCorrecting(true)}>
+                <button className="btn-quiet mt-3" onClick={() => setCorrecting(true)}>
                   Correct this answer
                 </button>
               ))}
           </div>
 
           <div className="card p-5">
-            <h2 className="mb-3 font-bold">Feedback in this conversation</h2>
+            <h2 className="mb-3 text-base font-semibold">Feedback in this conversation</h2>
             {h.feedback.length === 0 ? (
               <p className="text-sm text-muted">The visitor didn&apos;t rate any answers.</p>
             ) : (
@@ -155,11 +183,17 @@ export default function HandoffDetail() {
                     as_correction: asCorrection,
                     send_email: sendEmail && !!emailTo,
                     send_whatsapp: sendWhatsapp && !!whatsappTo,
+                    send_sms: sendSms && !!smsTo,
                   },
                   [
                     "Reply saved",
-                    sendEmail && emailTo ? `e-mailed to ${emailTo}` : "",
+                    sendEmail && emailTo
+                      ? emailWaits
+                        ? `e-mail to ${emailTo} queued (no mail server is set up yet, so it has not gone)`
+                        : `e-mailed to ${emailTo}`
+                      : "",
                     sendWhatsapp && whatsappTo ? `queued for WhatsApp to ${whatsappTo}` : "",
+                    sendSms && smsTo ? `queued for SMS to ${smsTo}` : "",
                     asCorrection ? "sent for review as a correction" : "",
                   ]
                     .filter(Boolean)
@@ -167,7 +201,7 @@ export default function HandoffDetail() {
                 ).then(() => setReply(""));
               }}
             >
-              <h2 className="font-bold">Your answer</h2>
+              <h2 className="text-base font-semibold">Your answer</h2>
               <label htmlFor="reply" className="sr-only">
                 Your answer
               </label>
@@ -201,6 +235,12 @@ export default function HandoffDetail() {
                   <span>
                     E-mail this reply to {lead?.is_minor ? "the parent or guardian" : "the applicant"} (
                     {emailTo})
+                    {emailWaits && (
+                      <span className="block text-xs text-muted">
+                        No mail server is set up yet: the e-mail waits and goes once one is. Phone them if it
+                        is urgent.
+                      </span>
+                    )}
                   </span>
                 </label>
               )}
@@ -220,25 +260,37 @@ export default function HandoffDetail() {
                   </span>
                 </label>
               )}
+              {smsTo && (
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={sendSms}
+                    onChange={(e) => setSendSms(e.target.checked)}
+                    className="mt-1 accent-[rgb(var(--brand))]"
+                  />
+                  <span>
+                    Send this reply by SMS to the applicant ({smsTo}). A long reply is shortened to three SMS
+                    {reply.length > 440 ? ` (yours has ${reply.length} characters)` : ""}.
+                  </span>
+                </label>
+              )}
               <div className="flex flex-wrap gap-2">
                 <button className="btn-primary" disabled={busy || !reply.trim() || !mineOrFree}>
                   Save reply
                 </button>
-                {h.status === "open" && (
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    disabled={busy}
-                    onClick={() => void act("claim", undefined, "You own this task now.")}
-                  >
-                    Claim
-                  </button>
-                )}
                 <button
                   type="button"
                   className="btn-ghost"
                   disabled={busy}
-                  onClick={() => void act("resolve", undefined, "Marked as done.")}
+                  onClick={() => {
+                    // Closing a task ends the follow-up: ask, unless a reply is being saved anyway.
+                    if (
+                      !reply.trim() &&
+                      !window.confirm("Mark this task resolved without saving a reply? It leaves the queue.")
+                    )
+                      return;
+                    void act("resolve", undefined, "Marked as done.");
+                  }}
                 >
                   Mark resolved
                 </button>
@@ -249,7 +301,7 @@ export default function HandoffDetail() {
 
         <aside className="space-y-6">
           <div className="card p-5 text-sm">
-            <h2 className="mb-3 font-bold">Contact</h2>
+            <h2 className="mb-3 text-base font-semibold">Contact</h2>
             {!lead ? (
               <p className="text-muted">
                 No contact details (the visitor didn&apos;t share them, or withdrew consent).
@@ -311,7 +363,7 @@ export default function HandoffDetail() {
             )}
           </div>
           <div className="card p-5 text-sm">
-            <h2 className="mb-3 font-bold">History</h2>
+            <h2 className="mb-3 text-base font-semibold">History</h2>
             <ol className="space-y-3 border-l-2 border-line pl-4">
               {h.events.map((e, i) => (
                 <li key={i}>

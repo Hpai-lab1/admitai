@@ -1,0 +1,33 @@
+- file: prospectus-2027-28.md
+  title: Prospectus 2027-28
+  academic_year: 2027-28
+  owner: Admissions
+  owner_role: admission_officer
+  valid_to: 2028-07-31
+- file: cse-curriculum-2027-28.md
+  title: B.Tech CSE curriculum 2027-28
+  academic_year: 2027-28
+  department: Computer Science
+  owner: Computer Science
+  owner_role: faculty
+  valid_to: 2028-07-31
+- file: mech-curriculum-2027-28.md
+  title: B.Tech Mechanical curriculum 2027-28
+  academic_year: 2027-28
+  department: Mechanical
+  owner: Mechanical
+  owner_role: faculty
+  valid_to: 2028-07-31
+- file: hostel-rules-2027-28.md
+  title: Hostel rules 2027-28
+  academic_year: 2027-28
+  owner: Student Affairs
+  owner_role: admission_officer
+  valid_to: 2028-07-31
+- file: fee-notice-2026-27.md
+  title: Fee notice 2026-27
+  academic_year: 2026-27
+  owner: Finance
+  owner_role: admission_officer
+  status: expired
+  reason: replaced by the 2027-28 catalogue

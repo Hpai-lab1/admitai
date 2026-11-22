@@ -5,7 +5,7 @@ import { Badge, Loading, Notice, PageHeader, useApi } from "@/components/console
 import { useMe } from "@/components/console/Shell";
 import { Webhooks } from "@/components/console/Webhooks";
 import { ApiError, staff } from "@/lib/api";
-import { ROLE_LABEL, type Role } from "@/lib/roles";
+import { isDepartmentRole, ROLE_HELP, ROLE_LABEL, type Role } from "@/lib/roles";
 import { contrast } from "@/lib/theme";
 import { shortDate } from "@/lib/time";
 
@@ -48,21 +48,30 @@ type AuditRow = {
 };
 
 const TABS = ["Staff", "College settings", "Integrations", "Audit log"] as const;
-const ROLES: Role[] = ["college_admin", "admission_officer", "faculty", "marketing_manager"];
+const ROLES: Role[] = [
+  "college_admin",
+  "admission_officer",
+  "admission_counsellor",
+  "faculty",
+  "finance_officer",
+  "hostel_warden",
+  "marketing_manager",
+  "management",
+];
 
 export default function Admin() {
   const [tab, setTab] = useState<(typeof TABS)[number]>("Staff");
   return (
     <>
       <PageHeader title="Admin" sub="Accounts, college settings and the audit trail." />
-      <div role="tablist" aria-label="Admin sections" className="mb-6 flex gap-2">
+      <div role="tablist" aria-label="Admin sections" className="tabs mb-6">
         {TABS.map((t) => (
           <button
             key={t}
             role="tab"
             aria-selected={tab === t}
             onClick={() => setTab(t)}
-            className={`rounded-full px-4 py-1.5 text-sm font-semibold ${tab === t ? "bg-accent text-white" : "bg-surface text-accent"}`}
+            className={`tab ${tab === t ? "tab-on" : ""}`}
           >
             {t}
           </button>
@@ -73,6 +82,75 @@ export default function Admin() {
       {tab === "Integrations" && <Webhooks />}
       {tab === "Audit log" && <Audit />}
     </>
+  );
+}
+
+/** A staff member's role, changeable in place. A role limited to departments asks for one when
+ * the person has none; other roles drop their departments. The API signs the person out so the
+ * new permissions apply at once, and audits the change. */
+function RoleCell({
+  user,
+  departments,
+  onSave,
+}: {
+  user: User;
+  departments: string[];
+  onSave: (body: { role: Role; departments: string[] }) => void;
+}) {
+  const [pending, setPending] = useState<Role | null>(null);
+  const [dept, setDept] = useState("");
+  const choose = (role: Role) => {
+    if (role === user.role) return setPending(null);
+    if (!isDepartmentRole(role)) return onSave({ role, departments: [] });
+    if (user.departments.length > 0) return onSave({ role, departments: user.departments });
+    setPending(role); // needs a department first
+  };
+  return (
+    <div className="space-y-1">
+      <label className="sr-only" htmlFor={`role-${user.id}`}>
+        Role of {user.full_name}
+      </label>
+      <select
+        id={`role-${user.id}`}
+        className="field py-1 text-sm"
+        value={pending ?? user.role}
+        onChange={(e) => choose(e.target.value as Role)}
+      >
+        {ROLES.map((r) => (
+          <option key={r} value={r}>
+            {ROLE_LABEL[r]}
+          </option>
+        ))}
+      </select>
+      {pending && (
+        <div className="flex gap-1">
+          <label className="sr-only" htmlFor={`dept-${user.id}`}>
+            Department
+          </label>
+          <select
+            id={`dept-${user.id}`}
+            className="field py-1 text-sm"
+            value={dept}
+            onChange={(e) => setDept(e.target.value)}
+          >
+            <option value="">Department…</option>
+            {departments.map((d) => (
+              <option key={d}>{d}</option>
+            ))}
+          </select>
+          <button
+            className="btn-quiet px-2 py-1 text-xs"
+            disabled={!dept}
+            onClick={() => {
+              onSave({ role: pending, departments: [dept] });
+              setPending(null);
+            }}
+          >
+            Save
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -109,7 +187,7 @@ function Staff() {
           email: form.email,
           full_name: form.full_name,
           role: form.role,
-          departments: form.role === "faculty" && form.department ? [form.department] : [],
+          departments: isDepartmentRole(form.role) && form.department ? [form.department] : [],
         }),
       });
       setCreated({ email: r.email, password: r.temporary_password });
@@ -130,7 +208,7 @@ function Staff() {
           <div className="card overflow-x-auto">
             <table className="w-full text-left text-sm">
               <caption className="sr-only">Staff accounts</caption>
-              <thead className="bg-paper text-xs uppercase tracking-wide text-muted">
+              <thead className="bg-paper text-xs text-muted">
                 <tr>
                   <th className="px-4 py-3">Name</th>
                   <th className="px-4 py-3">Role</th>
@@ -148,7 +226,11 @@ function Staff() {
                       <p className="text-xs text-muted">{u.email}</p>
                     </td>
                     <td className="px-4 py-3">
-                      {ROLE_LABEL[u.role]}
+                      {u.id === me.id || u.role === "super_admin" ? (
+                        ROLE_LABEL[u.role]
+                      ) : (
+                        <RoleCell user={u} departments={departments} onSave={(body) => void patch(u, body)} />
+                      )}
                       {u.departments.length > 0 && (
                         <p className="text-xs text-muted">{u.departments.join(", ")}</p>
                       )}
@@ -188,7 +270,7 @@ function Staff() {
       </section>
 
       <section className="card h-fit p-5">
-        <h2 className="mb-3 font-bold">Add a staff member</h2>
+        <h2 className="mb-3 text-base font-semibold">Add a staff member</h2>
         {created && (
           <Notice kind="ok">
             Account created for {created.email}. Temporary password (shown once):{" "}
@@ -237,8 +319,9 @@ function Staff() {
                 </option>
               ))}
             </select>
+            <p className="mt-1 text-xs text-muted">{ROLE_HELP[form.role]}</p>
           </div>
-          {form.role === "faculty" && (
+          {isDepartmentRole(form.role) && (
             <div>
               <label htmlFor="u-dept" className="label">
                 Department
@@ -323,7 +406,7 @@ function SettingsForm({ initial }: { initial: TenantConfig }) {
     <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
       <form className="card space-y-4 p-5" onSubmit={save}>
         {msg && <Notice kind={msg.kind}>{msg.text}</Notice>}
-        <h2 className="font-bold">Look and feel</h2>
+        <h2 className="text-base font-semibold">Look and feel</h2>
         <div className="grid gap-3 sm:grid-cols-3">
           {(
             [
@@ -373,7 +456,7 @@ function SettingsForm({ initial }: { initial: TenantConfig }) {
         </div>
         {text("logo_url", "Logo address (URL)")}
 
-        <h2 className="pt-2 font-bold">Assistant</h2>
+        <h2 className="pt-2 text-base font-semibold">Assistant</h2>
         {text("assistant_name", "Assistant name")}
         {text("greeting", "Greeting")}
         {text(
@@ -395,7 +478,7 @@ function SettingsForm({ initial }: { initial: TenantConfig }) {
         {text("apply_url", "Apply now link")}
         {text("privacy_notice_url", "Privacy notice link")}
 
-        <h2 className="pt-2 font-bold">Response promise</h2>
+        <h2 className="pt-2 text-base font-semibold">Response promise</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label htmlFor="c-sla" className="label">
@@ -489,7 +572,7 @@ function Audit() {
         <div className="card overflow-x-auto">
           <table className="w-full text-left text-sm">
             <caption className="sr-only">Audit log</caption>
-            <thead className="bg-paper text-xs uppercase tracking-wide text-muted">
+            <thead className="bg-paper text-xs text-muted">
               <tr>
                 <th className="px-4 py-3">When</th>
                 <th className="px-4 py-3">Who</th>

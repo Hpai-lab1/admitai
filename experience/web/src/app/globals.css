@@ -24,6 +24,10 @@
   --c-muted: 75 85 99;
   --c-line: 229 231 235;
   --c-subtle: 243 244 246;
+  /* status text: red-700, amber-700, green-700 (4.5:1 on white) */
+  --c-danger: 185 28 28;
+  --c-warn: 180 83 9;
+  --c-ok: 21 128 61;
   color-scheme: light;
 }
 
@@ -35,6 +39,9 @@
     --c-muted: 168 172 184;
     --c-line: 58 58 68;
     --c-subtle: 44 44 54;
+    --c-danger: 248 113 113;
+    --c-warn: 251 191 36;
+    --c-ok: 74 222 128;
     color-scheme: dark;
   }
   :root:not(.light) body .text-brand:not(.light *) {
@@ -46,6 +53,11 @@
   :root:not(.light) body .text-accent:not(.light *):not(.bg-white) {
     color: rgb(var(--accent-on-dark));
   }
+  /* Secondary buttons sit on the dark surface: their brand text and border use the light tint. */
+  :root:not(.light) body .btn-secondary:not(.light *) {
+    color: rgb(var(--brand2-on-dark));
+    border-color: rgb(var(--brand2-on-dark));
+  }
 }
 
 :root.dark {
@@ -55,6 +67,9 @@
   --c-muted: 168 172 184;
   --c-line: 58 58 68;
   --c-subtle: 44 44 54;
+  --c-danger: 248 113 113;
+  --c-warn: 251 191 36;
+  --c-ok: 74 222 128;
   color-scheme: dark;
 }
 :root.dark body .text-brand:not(.light *) {
@@ -65,6 +80,10 @@
 }
 :root.dark body .text-accent:not(.light *):not(.bg-white) {
   color: rgb(var(--accent-on-dark));
+}
+:root.dark body .btn-secondary:not(.light *) {
+  color: rgb(var(--brand2-on-dark));
+  border-color: rgb(var(--brand2-on-dark));
 }
 
 html {
@@ -91,7 +110,7 @@ body {
     color: var(--on-brand);
   }
   .btn-secondary {
-    @apply btn border border-brand2 bg-white text-brand2 hover:bg-brand2/5;
+    @apply btn border border-brand2 bg-surface text-brand2 hover:bg-brand2/5;
   }
   .btn-ghost {
     @apply btn text-ink hover:bg-black/5;
@@ -112,8 +131,211 @@ body {
   }
 }
 
+/* Staff console: a quieter, denser work surface than the public widget. Scoped to .console so the
+   college-facing pages keep their own look. Neutral tokens flip in dark mode by themselves. */
+@layer components {
+  .btn-quiet {
+    @apply btn border border-line bg-surface text-ink hover:bg-subtle;
+  }
+  /* Underline tabs: the selected one carries the brand colour; the rest stay neutral. */
+  .tabs {
+    @apply flex flex-wrap gap-1 border-b border-line;
+  }
+  .tab {
+    @apply -mb-px min-h-10 border-b-2 border-transparent px-3 text-sm font-medium text-muted hover:text-ink
+      focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand;
+  }
+  .tab-on {
+    @apply border-brand font-semibold text-ink;
+  }
+  .btn-sm {
+    @apply min-h-9 px-3 text-xs;
+  }
+  .btn-danger {
+    @apply btn border border-danger/50 bg-surface text-danger hover:bg-danger/10;
+  }
+}
+.console .card {
+  @apply rounded-lg shadow-none;
+}
+.console .field {
+  @apply rounded-md;
+}
+
 .sr-only-focusable:not(:focus) {
   @apply sr-only;
+}
+
+/* ------------------------------------------------------------------ chat palette
+   "Ivory & Aubergine": the visitor chat (floating and in-page) reads on warm ivory with warm
+   near-black text (16:1); the college's brand colours carry the header, the visitor's own messages
+   and the buttons. On a device in dark mode the floating chat turns "Aubergine Night"; a chat inside
+   a page that keeps light colours (.light) stays ivory. Contrast checked for WCAG 2.2 AA. */
+.chat-ivory {
+  --c-paper: 250 246 239; /* #FAF6EF ivory */
+  --c-surface: 255 253 249; /* #FFFDF9 message cards */
+  --c-ink: 31 26 23; /* #1F1A17 warm near-black */
+  --c-muted: 107 98 89; /* #6B6259, 5.5:1 on ivory */
+  --c-line: 232 223 210; /* #E8DFD2 */
+  --c-subtle: 243 236 225; /* #F3ECE1 */
+  --chat-header: var(--accent);
+  --chat-header-text: 250 246 239;
+  --chat-you: var(--brand2);
+  --chat-shadow: 31 26 23;
+}
+.chat-header {
+  background-color: rgb(var(--chat-header));
+  color: rgb(var(--chat-header-text));
+  border-bottom: 2px solid rgb(var(--lux-gold));
+}
+.chat-you {
+  background-color: rgb(var(--chat-you));
+  color: #fff;
+}
+.chat-card {
+  background-color: rgb(var(--c-surface));
+  box-shadow:
+    0 1px 2px rgb(var(--chat-shadow) / 0.06),
+    0 8px 22px -12px rgb(var(--chat-shadow) / 0.28);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .chat-ivory:not(.light *) {
+    --c-paper: 26 16 39; /* #1A1027 aubergine night */
+    --c-surface: 38 25 58; /* #26193A */
+    --c-ink: 243 237 227; /* #F3EDE3, 15.7:1 */
+    --c-muted: 185 174 201; /* #B9AEC9 */
+    --c-line: 58 42 82; /* #3A2A52 */
+    --c-subtle: 47 33 71; /* #2F2147 */
+    --chat-header: 18 10 30; /* #120A1E */
+    --chat-header-text: 243 237 227;
+    --chat-you: 91 58 154; /* #5B3A9A */
+    --chat-shadow: 0 0 0;
+  }
+}
+:root.dark .chat-ivory:not(.light *) {
+  --c-paper: 26 16 39;
+  --c-surface: 38 25 58;
+  --c-ink: 243 237 227;
+  --c-muted: 185 174 201;
+  --c-line: 58 42 82;
+  --c-subtle: 47 33 71;
+  --chat-header: 18 10 30;
+  --chat-header-text: 243 237 227;
+  --chat-you: 91 58 154;
+  --chat-shadow: 0 0 0;
+}
+
+/* ------------------------------------------------------------------ programme chat ("lux")
+   The demo site's per-programme chat: a slow, expensive-feeling entrance. Each element's resting
+   style is its final look; the keyframes only describe where it comes from, so with reduced motion
+   (rule below) everything is simply there. Only opacity, transform and filter are animated. */
+:root {
+  --lux-ease: cubic-bezier(0.16, 1, 0.3, 1); /* long, soft landing */
+  --lux-gold: 212 175 105;
+}
+@keyframes lux-rise {
+  from {
+    opacity: 0;
+    transform: translateY(32px);
+    filter: blur(12px);
+  }
+}
+@keyframes lux-word {
+  from {
+    opacity: 0;
+    transform: translateY(0.55em) rotateX(-55deg);
+    filter: blur(10px);
+  }
+}
+@keyframes lux-rule {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes lux-card {
+  from {
+    opacity: 0;
+    transform: translateY(56px) scale(0.965);
+    filter: blur(6px);
+  }
+}
+@keyframes lux-chip {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.94);
+  }
+}
+@keyframes lux-sheen {
+  from {
+    background-position: 160% 0;
+  }
+  to {
+    background-position: -60% 0;
+  }
+}
+@keyframes lux-aurora {
+  0% {
+    transform: translate3d(-6%, -4%, 0) scale(1);
+  }
+  100% {
+    transform: translate3d(6%, 5%, 0) scale(1.12);
+  }
+}
+@keyframes lux-flash {
+  0% {
+    transform: translateY(0);
+    box-shadow: 0 0 0 0 rgb(var(--brand) / 0);
+  }
+  35% {
+    transform: translateY(-6px);
+    box-shadow:
+      0 18px 40px -12px rgb(var(--accent) / 0.45),
+      0 0 0 4px rgb(var(--brand) / 0.35);
+  }
+  100% {
+    transform: translateY(0);
+    box-shadow: 0 0 0 0 rgb(var(--brand) / 0);
+  }
+}
+.lux-rise {
+  animation: lux-rise 1100ms var(--lux-ease) both;
+}
+.lux-title {
+  perspective: 900px;
+}
+.lux-word {
+  display: inline-block;
+  transform-origin: 50% 100%;
+  animation: lux-word 1000ms var(--lux-ease) both;
+}
+.lux-sheen {
+  background-image: linear-gradient(100deg, #fff 0%, #fff 40%, rgb(var(--lux-gold)) 50%, #fff 60%, #fff 100%);
+  background-size: 250% 100%;
+  background-position: -60% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: lux-sheen 2400ms 1300ms var(--lux-ease) both;
+}
+.lux-rule {
+  transform-origin: left center;
+  animation: lux-rule 1400ms 500ms var(--lux-ease) both;
+}
+.lux-card {
+  animation: lux-card 1300ms 350ms var(--lux-ease) both;
+}
+.lux-chip {
+  animation: lux-chip 700ms var(--lux-ease) both;
+}
+.lux-flash {
+  animation: lux-flash 1000ms var(--lux-ease);
+}
+.lux-aurora {
+  animation: lux-aurora 18s ease-in-out infinite alternate;
+}
+.lux-progress {
+  transform-origin: left center;
+  transition: opacity 400ms ease;
 }
 
 @media (prefers-reduced-motion: reduce) {

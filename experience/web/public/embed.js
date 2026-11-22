@@ -3,13 +3,40 @@
  * Optional: data-label="Ask Admissions"  data-color="#E34A21"
  */
 (function () {
+  // The button has white text: darken the college's colour, keeping its hue, until the text
+  // reads at 4.5:1 (WCAG 2.2 AA), as the widget itself does (lib/theme.ts accessible()).
+  function luminance(rgb) {
+    var c = rgb.map(function (v) {
+      v /= 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  }
+  function readable(hex) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(String(hex).trim());
+    if (!m) return "#1E3A8A";
+    var n = parseInt(m[1], 16);
+    var rgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    for (var i = 0; i < 60 && 1.05 / (luminance(rgb) + 0.05) < 4.5; i++)
+      rgb = rgb.map(function (v) {
+        return Math.round(v * 0.96);
+      });
+    return (
+      "#" +
+      rgb
+        .map(function (v) {
+          return ("0" + v.toString(16)).slice(-2);
+        })
+        .join("")
+    );
+  }
   var script = document.currentScript;
   if (!script || window.__admitaiLoaded) return;
   window.__admitaiLoaded = true;
   var key = script.getAttribute("data-key");
   var origin = new URL(script.src).origin;
   var label = script.getAttribute("data-label") || "Ask Admissions";
-  var color = script.getAttribute("data-color") || "#1E3A8A";
+  var color = readable(script.getAttribute("data-color") || "#1E3A8A");
   var utm = new URLSearchParams(location.search);
   var q = new URLSearchParams({ key: key || "", ref: location.href.slice(0, 400) });
   utm.forEach(function (v, k) {

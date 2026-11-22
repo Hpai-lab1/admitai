@@ -67,6 +67,12 @@ export function replyEmail(lead: LeadSummary | null): string | null {
 /** Where a staff reply can go on WhatsApp (PRD F3.6): the adult applicant's own number, or the
  *  guardian's WhatsApp number when a minor's guardian verified on WhatsApp. Mirrors Module C's
  *  `messaging.staff_reply_whatsapp`; Module B still refuses anyone who opted out. */
+/** Where an SMS reply goes: an adult's own mobile. A minor's guardian agreed to e-mail or
+ *  WhatsApp only, so there is none for a minor (matches messaging.staff_reply_sms). */
+export function replySms(lead: LeadSummary | null): string | null {
+  return lead && !lead.is_minor ? lead.phone : null;
+}
+
 export function replyWhatsapp(lead: LeadSummary | null): string | null {
   if (!lead) return null;
   if (lead.is_minor)

@@ -200,7 +200,7 @@ def deliver(settings: Settings, tenant_id: UUID, limit: int = 100) -> dict:
 
 
 def deliver_all(settings: Settings) -> dict:
-    with psycopg.connect(settings.admin_database_url) as conn:
+    with psycopg.connect(settings.worker_database_url) as conn:
         tenants = [
             r[0]
             for r in conn.execute(
@@ -219,7 +219,7 @@ if __name__ == "__main__":
     )
     a = ap.parse_args()
     s = Settings()
-    if not (s.database_url and s.admin_database_url):
+    if not (s.database_url and s.worker_database_url):
         sys.exit("Set DATABASE_URL and ADMIN_DATABASE_URL (source local.env.sh)")
     while True:
         done = deliver_all(s)

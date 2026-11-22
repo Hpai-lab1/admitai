@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from pydantic import BaseModel, Field
 
 from .. import catalogue, catalogue_cases, health
 from ..config import Settings
@@ -68,3 +71,52 @@ async def import_catalogue(
     # F10.3: the launch test set follows the catalogue.
     result["eval_cases"] = catalogue_cases.generate(settings, tenant)
     return result
+
+
+class CheckIn(BaseModel):
+    text: str = Field(max_length=8000)
+
+
+@router.post(
+    "/catalogue/check",
+    summary="Amounts in a text (a staff correction) that disagree with the catalogue",
+)
+def check_text(
+    body: CheckIn,
+    tenant: str = Depends(tenant_dep),
+    settings: Settings = Depends(settings_dep),
+):
+    with tx(settings.database_url, tenant) as cur:
+        return {
+            "conflicts": health.conflicts_in(cur, body.text),
+            # what approving it would change in the official fee list
+            "fee_changes": health.fee_changes(cur, body.text),
+        }
+
+
+class FeeIn(BaseModel):
+    amount: Decimal = Field(gt=0, lt=Decimal("100000000"), decimal_places=2)
+    changed_by: str | None = None
+
+
+@router.patch(
+    "/catalogue/fees/{fee_id}",
+    summary="Change one fee (College Admin, from the console)",
+)
+def change_fee(
+    fee_id: str,
+    body: FeeIn,
+    tenant: str = Depends(tenant_dep),
+    settings: Settings = Depends(settings_dep),
+):
+    from .. import search
+
+    with tx(settings.database_url, tenant) as cur:
+        done = catalogue.set_fee(cur, fee_id, body.amount)
+    if done is None:
+        raise HTTPException(404, "Fee not found")
+    search.invalidate(tenant)
+    # Catalogue wins (8.3): curated answers quoting the old amount are suspended at once.
+    done["curated_suspended"] = health.check_catalogue_conflicts(settings, tenant)
+    done["eval_cases"] = catalogue_cases.generate(settings, tenant)
+    return done

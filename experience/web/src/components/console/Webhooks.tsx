@@ -82,7 +82,7 @@ export function Webhooks() {
               with it.
             </p>
             <code className="mt-2 block break-all rounded bg-subtle p-2 text-sm">{secret.secret}</code>
-            <button className="btn-secondary mt-3" onClick={() => setSecret(null)}>
+            <button className="btn-quiet mt-3" onClick={() => setSecret(null)}>
               I have saved it
             </button>
           </div>
@@ -110,19 +110,19 @@ export function Webhooks() {
               {ep.active && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
-                    className="btn-secondary"
+                    className="btn-quiet"
                     onClick={() => void call(() => staff(`/webhooks/${ep.id}/test`, { method: "POST" }))}
                   >
                     Send a test
                   </button>
-                  <button className="btn-secondary" onClick={() => setOpen(open === ep.id ? null : ep.id)}>
+                  <button className="btn-quiet" onClick={() => setOpen(open === ep.id ? null : ep.id)}>
                     {open === ep.id ? "Hide deliveries" : "Deliveries"}
                   </button>
-                  <button className="btn-secondary" onClick={() => void rotate(ep)}>
+                  <button className="btn-quiet" onClick={() => void rotate(ep)}>
                     New secret
                   </button>
                   <button
-                    className="btn-secondary"
+                    className="btn-quiet"
                     onClick={() => void call(() => staff(`/webhooks/${ep.id}`, { method: "DELETE" }))}
                   >
                     Stop sending
@@ -135,7 +135,7 @@ export function Webhooks() {
         )}
       </section>
       <form className="card h-fit space-y-3 p-5" onSubmit={(e) => void add(e)}>
-        <h2 className="font-bold">Add a webhook</h2>
+        <h2 className="text-base font-semibold">Add a webhook</h2>
         <label className="block text-sm font-semibold" htmlFor="wh-url">
           Address (https)
         </label>
@@ -182,7 +182,7 @@ function Deliveries({ id }: { id: string }) {
   if (!data?.items.length) return <p className="mt-3 text-sm text-muted">Nothing sent yet.</p>;
   return (
     <table className="mt-3 w-full text-left text-sm">
-      <thead className="text-xs uppercase tracking-wide text-muted">
+      <thead className="text-xs text-muted">
         <tr>
           <th className="py-1 pr-3">Event</th>
           <th className="py-1 pr-3">Status</th>

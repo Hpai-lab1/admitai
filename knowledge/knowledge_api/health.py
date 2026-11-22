@@ -7,6 +7,7 @@ import re
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
+from .by_design import not_answerable_by_design
 from . import curated
 from .config import Settings
 from .db import Jsonb, tx
@@ -39,12 +40,176 @@ def _mentions(text: str, p: dict) -> bool:
     )
 
 
+def conflicts_in(cur, text: str) -> list[dict]:
+    """Amounts in a staff correction that the catalogue does not have for the programme it names
+    (catalogue wins, 8.3): shown to the person writing or approving it, with the catalogue's
+    fees, so a fee that really changed is changed in the catalogue instead."""
+    # Staff often write a fee without "INR" ("4,00,000"): bare figures count too, but not years,
+    # phone numbers or small counts.
+    quoted = _amounts(text) | {
+        Decimal(n).normalize()
+        for n in (
+            m.replace(",", "") for m in re.findall(r"(?<![\d.])\d[\d,]{3,}", text)
+        )
+        if 1000 <= int(n) < 100_000_000 and not 1990 <= int(n) <= 2099
+    }
+    if not quoted:
+        return []
+    cur.execute("select * from kb.programs where status = 'approved'")
+    out = []
+    for p in cur.fetchall():
+        if not _mentions(text, p):
+            continue
+        cur.execute(
+            "select id, category, component, amount, period from kb.program_fees"
+            " where program_id = %s and (valid_to is null or valid_to >= current_date)"
+            " order by category, component",
+            (p["id"],),
+        )
+        fees = cur.fetchall()
+        wrong = quoted - {Decimal(f["amount"]).normalize() for f in fees}
+        if fees and wrong:
+            out.append(
+                {
+                    "program_id": str(p["id"]),
+                    "code": p["code"],
+                    "name": p["name"],
+                    "quoted": sorted(f"{a:f}" for a in wrong),
+                    "fees": [
+                        {
+                            "id": str(f["id"]),
+                            "category": f["category"],
+                            "component": f["component"],
+                            "amount": f"{Decimal(f['amount']).normalize():f}",
+                            "period": f["period"],
+                        }
+                        for f in fees
+                    ],
+                }
+            )
+    return out
+
+
+def _fee_for(text: str, amount: str, fees: list[dict]) -> dict | None:
+    """The catalogue fee a figure in a correction replaces: the fee whose component ("tuition",
+    "hostel") is named nearest before the figure, its category if one is named, else general.
+    None when it cannot be told (then nothing is changed automatically)."""
+    low = text.lower()
+    digits = re.sub(r"[^\d]", "", amount)
+    pos = None
+    for m in re.finditer(r"\d[\d,]*(?:\.\d+)?", low):
+        if re.sub(r"[^\d]", "", m.group().split(".")[0]) == digits.split(".")[0]:
+            pos = m.start()
+            break
+    if pos is None:
+        return None
+    before = low[max(0, pos - 80) : pos]
+    named = [
+        (before.rfind(f["component"].lower()), f)
+        for f in fees
+        if before.rfind(f["component"].lower()) >= 0
+    ]
+    if not named:
+        return None
+    nearest = max(i for i, _ in named)
+    options = [f for i, f in named if i == nearest]
+    if len(options) > 1:
+        options = [f for f in options if f["category"].lower() in before] or [
+            f for f in options if f["category"] == "general"
+        ]
+    return options[0] if len(options) == 1 else None
+
+
+def fee_changes(cur, text: str) -> list[dict]:
+    """The official fees a correction changes: each figure the catalogue does not have that can
+    be tied to one fee. Approving the correction changes these fees (after the gate), so the chat
+    quotes the corrected fee; a figure that cannot be tied to a fee changes nothing."""
+    out, seen = [], set()
+    for c in conflicts_in(cur, text):
+        for q in c["quoted"]:
+            f = _fee_for(text, q, c["fees"])
+            if f is None or f["id"] in seen:
+                continue
+            seen.add(f["id"])
+            out.append(
+                {
+                    "fee_id": f["id"],
+                    "program": c["name"],
+                    "code": c["code"],
+                    "component": f["component"],
+                    "category": f["category"],
+                    "old": f["amount"],
+                    "new": q,
+                }
+            )
+    return out
+
+
+def _inr(amount) -> str:
+    """250000 -> "2,50,000" (Indian grouping), as staff read fees."""
+    d = Decimal(str(amount)).normalize()
+    whole, _, frac = f"{d:f}".partition(".")
+    head, tail = whole[:-3], whole[-3:]
+    groups = []
+    while len(head) > 2:
+        groups.insert(0, head[-2:])
+        head = head[:-2]
+    if head:
+        groups.insert(0, head)
+    return ",".join([*groups, tail]) + (f".{frac.ljust(2, '0')}" if frac else "")
+
+
+def _resolve_agreeing(cur) -> int:
+    """The other way round: an answer this check paused agrees with the catalogue again (a fee
+    change was rolled back), so it is approved again and its open conflict proposal closed."""
+    cur.execute(
+        "select q.* from kb.curated_qa q where q.status = 'suspended'"
+        " and q.status_reason like 'amount % is not in the catalogue'"
+    )
+    paused = cur.fetchall()
+    if not paused:
+        return 0
+    cur.execute(
+        "select p.*, array_agg(f.amount) filter (where f.amount is not null) as amounts"
+        " from kb.programs p left join kb.program_fees f on f.program_id = p.id"
+        " where p.status = 'approved' group by p.id"
+    )
+    programs = cur.fetchall()
+    back = 0
+    for qa in paused:
+        named = [
+            p for p in programs if _mentions(qa["question"] + " " + qa["answer"], p)
+        ]
+        allowed = {Decimal(a).normalize() for p in named for a in (p["amounts"] or [])}
+        if not named or _amounts(qa["answer"]) - allowed:
+            continue
+        try:
+            curated.set_status(
+                cur,
+                str(qa["id"]),
+                "approved",
+                "catalogue-check",
+                "agrees with the catalogue again",
+            )
+        except curated.CuratedError:  # past its valid_to date: stays paused
+            continue
+        cur.execute(
+            "update learn.proposals set status = 'rejected', note = 'Closed: the answer agrees with"
+            " the catalogue again', updated_at = now() where status = 'pending'"
+            " and kind = 'curated_conflict' and diff->>'qa_id' = %s",
+            (str(qa["id"]),),
+        )
+        back += 1
+    return back
+
+
 def check_catalogue_conflicts(settings: Settings, tenant: str) -> int:
     """'Catalogue wins' (8.3): an approved curated answer that names a program and quotes an amount
     the catalogue does not have for it is suspended at once and raised as a proposal; the catalogue
     value is used meanwhile. Runs on every catalogue import and nightly."""
     found = 0
     with tx(settings.database_url, tenant) as cur:
+        _resolve_agreeing(cur)
         cur.execute(
             "select p.*, array_agg(f.amount) filter (where f.amount is not null) as amounts"
             " from kb.programs p left join kb.program_fees f on f.program_id = p.id"
@@ -77,9 +242,13 @@ def check_catalogue_conflicts(settings: Settings, tenant: str) -> int:
                 f"amount {', '.join(wrong)} is not in the catalogue",
             )
             catalogue = {
-                p["code"]: [str(Decimal(a).normalize()) for a in (p["amounts"] or [])]
+                p["code"]: [f"{Decimal(a).normalize():f}" for a in (p["amounts"] or [])]
                 for p in named
             }
+            listed = "; ".join(
+                f"{p['name']}: {', '.join(_inr(a) for a in (p['amounts'] or []))}"
+                for p in named
+            )
             cur.execute(
                 "insert into learn.proposals (tenant_id, kind, root_cause, rung, title, proposal, diff, department,"
                 " severity, affected, impact_raw, impact_score, due_at) values"
@@ -87,9 +256,9 @@ def check_catalogue_conflicts(settings: Settings, tenant: str) -> int:
                 (
                     tenant,
                     f"Curated answer disagrees with the catalogue: {qa['question'][:80]}",
-                    f"The curated answer quotes {', '.join(wrong)}; the catalogue has {catalogue}. It is suspended "
-                    "and the catalogue value is used. Approve to expire it (then write a corrected one), or reject "
-                    "if the amount is right.",
+                    f"The curated answer quotes {', '.join(_inr(w) for w in wrong)}, which is not in the"
+                    f" official fee list ({listed}). It is paused and the official fee is used. Approve to"
+                    " expire it, or reject if the amount is right.",
                     Jsonb(
                         {
                             "qa_id": str(qa["id"]),
@@ -138,10 +307,12 @@ def weekly_report(settings: Settings, tenant: str, today: date | None = None) ->
         unused = [r["question"] for r in cur.fetchall()]
         cur.execute(
             "select question, count(*) as n from learn.signals where root_cause = 'knowledge_gap'"
-            " and occurred_at >= %s and question is not null group by question order by n desc limit 10",
+            " and occurred_at >= %s and question is not null group by question order by n desc limit 40",
             (week_ago,),
         )
-        gaps = cur.fetchall()
+        gaps = [
+            g for g in cur.fetchall() if not not_answerable_by_design(g["question"])
+        ][:10]
         cur.execute(
             "select kind, verdict, count(*) as n from learn.signals where occurred_at >= %s group by kind, verdict",
             (week_ago,),

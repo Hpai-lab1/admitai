@@ -63,6 +63,7 @@ def kb_search(
         department=body.department,
         min_score=body.min_score,
         reranker=reranker,
+        lessons=settings.self_learning_enabled,
     )
     return {"query": body.query, **result}
 

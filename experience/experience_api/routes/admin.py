@@ -12,7 +12,7 @@ from psycopg.errors import UniqueViolation
 
 from ..config import Settings
 from ..db import Context, Jsonb, audit, tx
-from ..deps import require_staff, settings_dep
+from ..deps import DEPARTMENT_ROLES, require_staff, settings_dep
 from ..schemas import TenantConfig, User, UserCreated, UserIn, UserPatch
 from ..security import hash_password, password_problem
 
@@ -44,9 +44,10 @@ def _user(cur, user_id: UUID) -> dict:
 
 
 def _check_departments(cur, role: str, departments: list[str]) -> None:
-    if role == "faculty" and not departments:
+    if role in DEPARTMENT_ROLES and not departments:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, "Faculty need at least one department"
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Faculty, finance and hostel staff need at least one department",
         )
     cur.execute(
         "select config->'departments' as d from app.tenants where id = app.current_tenant()"

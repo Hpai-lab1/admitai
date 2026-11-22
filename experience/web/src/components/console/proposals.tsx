@@ -38,7 +38,29 @@ export type Proposal = {
   decided_by?: string | null;
   note?: string | null;
   eval?: { passed: boolean | null; gate: Gate | null } | null;
+  created_at?: string;
+  /** When the newest feedback or correction joined it (Module A). */
+  last_activity_at?: string;
+  /** College Admin's urgent fix: live before its test; taken down if the test failed. */
+  published_early?: boolean;
+  /** A correction quoting a fee the catalogue does not have (it would not change the chat). */
+  catalogue_conflicts?: import("./CatalogueConflict").Conflict[];
+  /** Official fees that approving it changes (after the test). */
+  fee_changes?: import("./CatalogueConflict").FeeChange[];
+  taken_down?: boolean;
 };
+
+export type InboxOrder = "newest" | "impact";
+
+/** Newest first (the latest feedback or correction on top), or biggest impact first. */
+export function sortInbox(items: Proposal[], order: InboxOrder): Proposal[] {
+  const when = (p: Proposal) => p.last_activity_at ?? p.created_at ?? "";
+  return [...items].sort((a, b) =>
+    order === "impact"
+      ? b.impact_score - a.impact_score || when(b).localeCompare(when(a))
+      : when(b).localeCompare(when(a)) || b.impact_score - a.impact_score,
+  );
+}
 
 // PRD 8.2 root causes, in plain words for approvers.
 export const CAUSE: Record<string, string> = {
@@ -106,8 +128,18 @@ export function GateSummary({ gate, note }: { gate: Gate | null; note?: string |
       {pct(gate.baseline?.groundedness)} → {pct(gate.candidate?.groundedness)}
       {gate.reasons.length ? ` · blocked: ${gate.reasons.join("; ")}` : " · passed"}
       {gate.warnings?.length ? (
-        <span className="mt-1 block text-amber-900">Check: {gate.warnings.join(" · ")}</span>
+        <span className="mt-1 block rounded bg-amber-100 px-2 py-0.5 text-amber-900">
+          Check: {gate.warnings.join(" · ")}
+        </span>
       ) : null}
     </p>
   );
+}
+
+/** The status shown for a decision, telling an urgent fix apart from a normal one. */
+export function decisionLabel(p: Proposal): string {
+  if (p.published_early && p.status === "evaluating") return "live, being tested";
+  if (p.taken_down) return "taken down";
+  if (p.published_early && p.status === "deployed") return "deployed (published at once)";
+  return (p.status ?? "").replace("_", " ");
 }

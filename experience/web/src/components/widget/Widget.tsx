@@ -1,6 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  CHAT_CHOICES,
+  chatRatingFeedback,
+  defaultChoice,
+  nextFeedback,
+  REASONS,
+  type ChatChoice,
+  type Reason,
+} from "@/lib/feedback";
 import { STRINGS, detectLang, isRephrase, type Lang } from "@/lib/i18n";
 import { themeStyle } from "@/lib/theme";
 import {
@@ -8,6 +17,7 @@ import {
   isLong,
   logEvent,
   quickReplies,
+  lastTurn,
   recoverAnswer,
   StreamCut,
   type HandoffRequest,
@@ -17,10 +27,17 @@ import {
   type Source,
   type TenantInfo,
   type WidgetSession,
+  fallbackAnswers,
+  type ApprovedAnswer,
 } from "@/lib/widget-api";
 import { staffAccessToken } from "@/lib/api";
+import { HandoffBanner } from "./HandoffBanner";
 import { VoiceError, play, record, voiceTurn } from "@/lib/voice";
+import { type RetellCall, startRetellCall } from "@/lib/retell";
 import { ContactFlow } from "./ContactFlow";
+import { Waiting } from "./Waiting";
+import { Fallback, closestAnswers } from "./Fallback";
+import { localTenant } from "@/lib/local-tenant";
 
 type Msg = {
   id: string;
@@ -32,35 +49,54 @@ type Msg = {
   offerHandoff?: boolean;
   handoff?: HandoffRequest;
   leadPrompt?: LeadPrompt;
-  feedback?: "down" | "other" | "sent";
+  feedback?: "down" | "other" | "detail" | "sent";
+  /** The reason chosen before the optional "tell us more" box ("detail"). */
+  feedbackReason?: Reason;
   streaming?: boolean;
+  /** The college's greeting: shown in whichever language the visitor has chosen. */
+  greeting?: boolean;
   expanded?: boolean;
+  /** Degraded mode: approved answers shown because the assistant could not answer. */
+  fallback?: ApprovedAnswer[];
 };
 
-const REASONS = [
-  "wrong",
-  "outdated",
-  "incomplete",
-  "not_what_i_asked",
-  "hard_to_understand",
-  "other",
-] as const;
-type Reason = (typeof REASONS)[number];
 const SIZES = [0.9, 1, 1.15];
 
 const uid = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Math.random());
 
+/** A chat about one programme (opened from its card): its greeting, its suggested questions, and
+ * the programme's name sent with questions that do not name it, so the assistant answers about it. */
+export type Focus = {
+  title: string;
+  greeting: string;
+  suggestions: string[];
+  label?: string;
+};
+
+/** The question as sent: a question in a programme's chat that does not name the programme is
+ * asked about it ("B.Des. Fashion Design: what is the fee?"); the visitor still sees what they typed. */
+export function forFocus(q: string, focus?: Focus): string {
+  if (!focus || q.toLowerCase().includes(focus.title.toLowerCase())) return q;
+  return `${focus.title}: ${q}`;
+}
+
 export function Widget({
   publicKey,
   themeOverride,
   fullPage = false,
+  embedded = false,
+  focus,
 }: {
   publicKey: string;
   themeOverride?: Partial<TenantInfo>;
   fullPage?: boolean;
+  /** Inside a page section (not the iframe): no close button, no page-wide language or text size. */
+  embedded?: boolean;
+  focus?: Focus;
 }) {
   const [session, setSession] = useState<WidgetSession | null>(null);
+  const [handoffAsked, setHandoffAsked] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -75,18 +111,30 @@ export function Widget({
   }>(null);
   // Module B said the visitor is under 18 (PRD F5.3): the contact flow goes straight to a guardian.
   const [guardianRequired, setGuardianRequired] = useState(false);
+  // The age answer given in this chat, so a second "Talk to a person" does not ask again.
+  const [saidAdult, setSaidAdult] = useState(false);
   const [size, setSize] = useState(1);
   const [lang, setLang] = useState<Lang>("en");
   // Voice orb states (PRD 13.4): idle, listening, thinking, speaking, error.
   const [voice, setVoice] = useState<"idle" | "listening" | "thinking" | "speaking" | "error">("idle");
   const listening = voice === "listening";
   const [caption, setCaption] = useState("");
-  const [rating, setRating] = useState<"closed" | "open" | "done">("closed");
+  // A Retell AI voice call in progress: its status and the latest line heard and said.
+  const [call, setCall] = useState<CallState | null>(null);
+  const [rating, setRating] = useState<"closed" | "open" | "why" | "done">("closed");
+  // After the stars: the dropdown ("satisfactory", "out of date", "other"...) and its words.
+  const [stars, setStars] = useState(0);
+  const [choice, setChoice] = useState<ChatChoice | "">("");
+  const [choiceText, setChoiceText] = useState("");
+  // The spoken-rating hint is for visitors who used voice in this chat, not for everyone.
+  const [usedVoice, setUsedVoice] = useState(false);
   const conversationId = useRef(uid());
   const listRef = useRef<HTMLOListElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const stopRec = useRef<null | (() => Promise<Blob>)>(null);
   const stopAudio = useRef<null | (() => void)>(null);
+  const retellCall = useRef<RetellCall | null>(null); // a Retell AI voice call, when configured
+  const callPoll = useRef<ReturnType<typeof setInterval> | null>(null); // voice turns into the chat
   const t = STRINGS[lang];
 
   useEffect(() => {
@@ -104,31 +152,40 @@ export function Widget({
     )
       .then((s) => {
         setSession(s);
-        setMessages([{ id: uid(), role: "assistant", text: s.tenant.greeting }]);
+        setMessages([
+          focus
+            ? { id: uid(), role: "assistant", text: focus.greeting }
+            : { id: uid(), role: "assistant", text: s.tenant.greeting, greeting: true },
+        ]);
       })
       .catch((e: Error) => setLoadError(e.message));
+    // A programme's chat starts once per programme (the page remounts it with a new key).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [publicKey]);
 
   useEffect(() => {
-    document.documentElement.style.setProperty("--text-scale", String(SIZES[size]));
-  }, [size]);
+    if (!embedded) document.documentElement.style.setProperty("--text-scale", String(SIZES[size]));
+  }, [size, embedded]);
 
   useEffect(() => {
-    document.documentElement.lang = lang;
-  }, [lang]);
+    if (!embedded) document.documentElement.lang = lang;
+  }, [lang, embedded]);
 
   useEffect(() => {
-    listRef.current?.lastElementChild?.scrollIntoView({ block: "end" });
+    // Scroll the conversation itself, never the page around it (the widget may sit inside a page).
+    const list = listRef.current;
+    if (list) list.scrollTop = list.scrollHeight;
   }, [messages]);
 
   useEffect(() => {
     // Esc inside the iframe closes the widget too (keyboard users)
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !fullPage) window.parent?.postMessage({ type: "admitai:close" }, "*");
+      if (e.key === "Escape" && !fullPage && !embedded)
+        window.parent?.postMessage({ type: "admitai:close" }, "*");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [fullPage]);
+  }, [fullPage, embedded]);
 
   const tenant: TenantInfo | null = session ? { ...session.tenant, ...(themeOverride ?? {}) } : null;
   const token = session?.session_token ?? "";
@@ -141,10 +198,9 @@ export function Widget({
     async (text: string) => {
       const q = text.trim();
       if (!q || !session || busy) return;
-      // auto-detect Hindi typed in Devanagari (manual switch stays available)
-      const typed = detectLang(q);
-      const answerLang: Lang = typed === "hi" ? "hi" : lang;
-      if (typed === "hi" && lang !== "hi") setLang("hi");
+      // The language the visitor chose (EN, हिं, ಕ) decides the reply, whatever the question is
+      // typed in; the widget never switches by itself (requested 10 Nov 2026).
+      const answerLang: Lang = lang;
       const previous = [...messages].reverse().find((m) => m.role === "user")?.text;
       event("user_message");
       if (previous && isRephrase(previous, q)) event("rephrase");
@@ -161,7 +217,7 @@ export function Widget({
       try {
         const done = await ask(
           conversationId.current,
-          q,
+          forFocus(q, focus),
           session.session_token,
           (tok) => patch((m) => ({ ...m, text: m.text + tok })),
           answerLang,
@@ -180,13 +236,21 @@ export function Widget({
         }));
         if (done.guardian_required) setGuardianRequired(true);
       } catch (e) {
+        // Degraded mode: when the assistant is down, show the college's approved answers that
+        // are closest to the question, beside the offer of a person (PRD 10.2).
+        const withFallback = () =>
+          fallbackAnswers(session.session_token)
+            .then((items) => closestAnswers(q, items))
+            .then((found) => found.length && patch((m) => ({ ...m, fallback: found })))
+            .catch(() => {});
         if (!(e instanceof StreamCut)) {
           patch((m) => ({ ...m, streaming: false, offerHandoff: true, text: (e as Error).message }));
+          if (!/too many|wait/i.test((e as Error).message)) void withFallback();
           return;
         }
         // The connection dropped: Module B still finishes the answer, so read it back.
         patch((m) => ({ ...m, text: t.reconnecting }));
-        const got = await recoverAnswer(conversationId.current, q, session.session_token);
+        const got = await recoverAnswer(conversationId.current, forFocus(q, focus), session.session_token);
         patch((m) =>
           got
             ? {
@@ -200,13 +264,14 @@ export function Widget({
               }
             : { ...m, streaming: false, offerHandoff: true, text: t.lostAnswer },
         );
+        if (!got) void withFallback();
         if (got) event("answer", got.message_id);
       } finally {
         setBusy(false);
         inputRef.current?.focus();
       }
     },
-    [session, busy, lang, messages, event, t],
+    [session, busy, lang, messages, event, t, focus],
   );
 
   function openContact(
@@ -220,13 +285,10 @@ export function Widget({
 
   async function rate(m: Msg, value: 1 | -1, reason?: Reason, comment?: string) {
     if (!session || !m.messageId) return;
-    const next: Msg["feedback"] =
-      value === 1 || (reason && reason !== "other") || comment !== undefined
-        ? "sent"
-        : reason === "other"
-          ? "other"
-          : "down";
-    setMessages((all) => all.map((x) => (x.id === m.id ? { ...x, feedback: next } : x)));
+    const next: Msg["feedback"] = nextFeedback(value, reason, comment);
+    setMessages((all) =>
+      all.map((x) => (x.id === m.id ? { ...x, feedback: next, feedbackReason: reason } : x)),
+    );
     if (next !== "sent") return; // wait for the reason (and the text for "other")
     await visitor(session.session_token, "/feedback", {
       conversation_id: conversationId.current,
@@ -239,14 +301,23 @@ export function Widget({
     }).catch(() => {});
   }
 
-  async function rateChat(stars: number) {
+  async function rateChat(value: number, reason: Reason | null = null, comment: string | null = null) {
     setRating("done");
     await visitor(token, "/feedback", {
       conversation_id: conversationId.current,
       message_id: "conversation",
       kind: "rating",
-      value: stars,
+      value,
+      reason,
+      comment,
     }).catch(() => {});
+  }
+
+  function pickStars(n: number) {
+    setStars(n);
+    setChoice(defaultChoice(n));
+    setChoiceText("");
+    setRating("why");
   }
 
   async function withdraw() {
@@ -271,8 +342,101 @@ export function Widget({
     );
   }
 
+  function stopCallPoll() {
+    if (callPoll.current) clearInterval(callPoll.current);
+    callPoll.current = null;
+  }
+
+  function endCall() {
+    stopCallPoll();
+    retellCall.current?.stop();
+    retellCall.current = null;
+    setCall(null);
+    setVoice("idle");
+    setCaption("");
+  }
+
   async function toggleVoice() {
     if (!session) return;
+    // Retell AI: a hands-free call with its own panel; only "End call" ends it (the microphone
+    // does nothing during a call, so a habitual second tap cannot hang up before the answer).
+    if (call) return;
+    if (voice === "idle" || voice === "error") {
+      setCall({ status: "connecting", heard: "", said: "" });
+      // The call is also written into the chat, one bubble per thing said, so what was spoken
+      // stays readable after the call (seen live: answers were heard but never shown).
+      const callTag = `call-${uid()}-`;
+      // Two ways the call reaches the chat: Retell's live transcript (word by word, when its
+      // browser events arrive) or, failing that, each finished turn read back from Module B,
+      // which answers every spoken question in this conversation (with its sources).
+      let liveSeen = false;
+      const shown = new Set<string>();
+      const before = await lastTurn(conversationId.current, session.session_token);
+      if (before) shown.add(before.message_id);
+      const started = await startRetellCall(session.session_token, conversationId.current, lang, {
+        onTranscript: (lines) => {
+          if (!lines.length) return;
+          liveSeen = true;
+          setMessages((all) => [
+            ...all.filter((m) => !m.id.startsWith(callTag)),
+            ...lines.map((l, i) => ({
+              id: `${callTag}${i}`,
+              role: l.role === "user" ? ("user" as const) : ("assistant" as const),
+              text: l.content,
+            })),
+          ]);
+        },
+        onAgentTalking: (talking) =>
+          setCall((c) => c && { ...c, status: talking ? "speaking" : "listening" }),
+        // What was heard, then the answer as it is spoken: the visitor sees it working.
+        onLine: (line) =>
+          setCall((c) =>
+            c && line.role === "user"
+              ? { ...c, status: "listening", heard: line.content }
+              : c && { ...c, status: "speaking", said: line.content },
+          ),
+        onEnded: () => {
+          stopCallPoll();
+          retellCall.current = null;
+          setCall(null);
+          setVoice("idle");
+        },
+        onError: () => {
+          stopCallPoll();
+          retellCall.current = null;
+          setCall(null);
+          setVoice("error");
+          setCaption(t.failed);
+        },
+      }).catch(() => null);
+      if (started) {
+        retellCall.current = started;
+        setUsedVoice(true);
+        stopCallPoll();
+        callPoll.current = setInterval(async () => {
+          if (liveSeen) return;
+          const turn = await lastTurn(conversationId.current, session.session_token);
+          if (!turn || shown.has(turn.message_id) || liveSeen) return;
+          shown.add(turn.message_id);
+          setMessages((m) => [
+            ...m,
+            { id: uid(), role: "user", text: turn.question?.trim() || "…" },
+            {
+              id: uid(),
+              role: "assistant",
+              text: turn.text,
+              sources: turn.sources,
+              messageId: turn.message_id,
+              traceId: turn.trace_id,
+              offerHandoff: turn.offer_handoff,
+            },
+          ]);
+        }, 1500);
+        setCall((c) => c && { ...c, status: c.status === "connecting" ? "listening" : c.status });
+        return;
+      }
+      setCall(null); // Retell is not set up for this college: push-to-talk as before
+    }
     if (voice === "speaking") {
       stopAudio.current?.(); // barge-in: stop the spoken answer and listen again
     }
@@ -282,7 +446,32 @@ export function Widget({
       setVoice("thinking");
       setCaption(t.thinking);
       try {
-        const r = await voiceTurn(session.session_token, conversationId.current, blob, lang);
+        const askedRating = rating === "open";
+        const r = await voiceTurn(
+          session.session_token,
+          conversationId.current,
+          blob,
+          lang,
+          askedRating ? "rating" : undefined,
+        );
+        if (askedRating) {
+          // A spoken rating of the chat: saved like the stars; nothing is asked of the assistant.
+          if (r.rating) void rateChat(r.rating);
+          setMessages((m) => [...m, { id: uid(), role: "system", text: r.answer }]);
+          if (r.audio_wav_base64) {
+            setVoice("speaking");
+            setCaption(t.speaking);
+            stopAudio.current = play(r.audio_wav_base64, () => {
+              stopAudio.current = null;
+              setVoice((v) => (v === "speaking" ? "idle" : v));
+              setCaption("");
+            });
+          } else {
+            setVoice("idle");
+            setCaption("");
+          }
+          return;
+        }
         event("user_message");
         setMessages((m) => [
           ...m,
@@ -318,6 +507,7 @@ export function Widget({
     }
     try {
       stopRec.current = await record();
+      setUsedVoice(true);
       setVoice("listening");
       setCaption(t.listening);
     } catch (e) {
@@ -351,10 +541,12 @@ export function Widget({
     .map((m) => ({ role: m.role as "user" | "assistant", text: m.text }));
   const answered = messages.some((m) => m.role === "assistant" && m.messageId);
   const lastMsg = messages[messages.length - 1];
+  // The college's own texts in the visitor's language; never English in Hindi or Kannada.
+  const local = localTenant(tenant, lang);
   const quick =
     !busy && lastMsg?.role === "assistant" && lastMsg.messageId && messages.length > 1
       ? quickReplies(
-          tenant.starter_questions.length ? tenant.starter_questions : tenant.topics,
+          focus?.suggestions ?? (local.starter_questions.length ? local.starter_questions : local.topics),
           messages.filter((m) => m.role === "user").map((m) => m.text),
         )
       : [];
@@ -362,10 +554,12 @@ export function Widget({
   return (
     <div
       style={themeStyle(tenant)}
-      className={`flex flex-col bg-paper font-brand text-ink ${fullPage ? "mx-auto min-h-dvh max-w-3xl" : "h-dvh"}`}
+      className={`chat-ivory flex flex-col bg-paper font-brand text-ink ${
+        embedded ? "h-full" : fullPage ? "mx-auto min-h-dvh max-w-3xl" : "h-dvh"
+      }`}
     >
       {/* header: like the college site's top bar */}
-      <header className="brand-gradient flex items-center gap-2 px-3 py-2">
+      <header className="chat-header flex items-center gap-2 px-3 py-2.5">
         {tenant.logo_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={tenant.logo_url} alt="" className="h-8 w-8 rounded bg-white object-contain p-0.5" />
@@ -378,8 +572,16 @@ export function Widget({
           </span>
         )}
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-base font-bold leading-tight">{tenant.assistant_name}</h1>
-          <p className="truncate text-xs opacity-90">{tenant.name}</p>
+          {embedded ? (
+            <p className="truncate font-display text-[1.05rem] font-semibold leading-tight">
+              {local.assistant_name}
+            </p>
+          ) : (
+            <h1 className="truncate font-display text-[1.05rem] font-semibold leading-tight">
+              {local.assistant_name}
+            </h1>
+          )}
+          <p className="truncate text-xs opacity-90">{focus?.title ?? tenant.name}</p>
         </div>
         <div
           role="group"
@@ -390,6 +592,7 @@ export function Widget({
             [
               ["en", "EN", "English"],
               ["hi", "हिं", "हिन्दी"],
+              ["kn", "ಕ", "ಕನ್ನಡ"],
             ] as const
           ).map(([code, label, name]) => (
             <button
@@ -421,7 +624,7 @@ export function Widget({
             </button>
           ))}
         </div>
-        {!fullPage && (
+        {!fullPage && !embedded && (
           <button
             onClick={close}
             aria-label={t.close}
@@ -432,10 +635,14 @@ export function Widget({
         )}
       </header>
 
-      {tenant.announcement && (
+      {local.announcement && (
         <p className="bg-accent px-4 py-1.5 text-center text-xs font-medium text-white">
-          {tenant.announcement}
+          {local.announcement}
         </p>
+      )}
+
+      {handoffAsked && !contact && (
+        <HandoffBanner token={session.session_token} conversationId={conversationId.current} t={t} />
       )}
 
       {contact ? (
@@ -448,12 +655,15 @@ export function Widget({
             programs={contact.programs}
             score={contact.score}
             knownMinor={guardianRequired}
+            knownAdult={saidAdult && !guardianRequired}
+            onAge={(minor) => (minor ? setGuardianRequired(true) : setSaidAdult(true))}
             token={session.session_token}
             tenant={tenant}
             lang={lang}
             conversationId={conversationId.current}
             transcript={transcript}
             onClose={(msg) => {
+              if (msg && contact.intent === "callback") setHandoffAsked(true);
               setContact(null);
               if (msg) setMessages((m) => [...m, { id: uid(), role: "system", text: msg }]);
             }}
@@ -477,8 +687,8 @@ export function Widget({
                 ) : (
                   <div
                     lang={detectLang(m.text) ?? lang}
-                    className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm shadow-sm ${
-                      m.role === "user" ? "rounded-br-sm bg-brand2 text-white" : "rounded-bl-sm bg-surface"
+                    className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm ${
+                      m.role === "user" ? "chat-you rounded-br-sm" : "chat-card rounded-bl-sm"
                     }`}
                   >
                     <span className="sr-only">{m.role === "user" ? t.you : t.assistant}</span>
@@ -486,7 +696,19 @@ export function Widget({
                       id={`text-${m.id}`}
                       className={`whitespace-pre-wrap ${!m.streaming && !m.expanded && isLong(m.text) ? "line-clamp-[12]" : ""}`}
                     >
-                      <AnswerText text={m.text || (m.streaming ? "…" : "")} sources={m.sources} />
+                      {m.streaming && !m.text && !m.greeting ? (
+                        <Waiting
+                          t={t}
+                          onAskSomeone={() =>
+                            openContact(
+                              "callback",
+                              `Waiting for an answer: ${messages[i - 1]?.text ?? ""}`.slice(0, 300),
+                            )
+                          }
+                        />
+                      ) : (
+                        <AnswerText text={m.greeting ? local.greeting : m.text} sources={m.sources} />
+                      )}
                     </p>
                     {!m.streaming && isLong(m.text) && (
                       <button
@@ -502,6 +724,7 @@ export function Widget({
                         {m.expanded ? t.showLess : t.showMore}
                       </button>
                     )}
+                    {!!m.fallback?.length && <Fallback items={m.fallback} t={t} />}
                     {m.offerHandoff && (
                       <button
                         className="btn-primary mt-2 px-3 text-xs"
@@ -550,12 +773,13 @@ export function Widget({
                   <p aria-hidden className="mb-1">
                     {t.rateQ}
                   </p>
+                  {usedVoice && <p className="mb-1 text-xs text-muted">{t.rateSay}</p>}
                   <div className="flex">
                     {[1, 2, 3, 4, 5].map((n) => (
                       <button
                         key={n}
                         aria-label={t.stars(n)}
-                        onClick={() => void rateChat(n)}
+                        onClick={() => pickStars(n)}
                         className="grid h-11 w-11 place-items-center rounded text-xl text-amber-500 hover:bg-subtle"
                       >
                         ★
@@ -563,6 +787,66 @@ export function Widget({
                     ))}
                   </div>
                 </fieldset>
+              </li>
+            )}
+            {rating === "why" && (
+              <li className="flex">
+                <form
+                  className="w-full rounded-2xl bg-surface px-3.5 py-2.5 text-sm shadow-sm"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const f = chatRatingFeedback(choice, choiceText);
+                    if (f) void rateChat(stars, f.reason, f.comment);
+                  }}
+                >
+                  <p className="mb-1 text-amber-500" aria-label={t.stars(stars)}>
+                    {"★".repeat(stars)}
+                    <span className="text-muted">{"★".repeat(5 - stars)}</span>
+                  </p>
+                  <label className="mb-1 block" htmlFor="rate-why">
+                    {t.rateWhy}
+                  </label>
+                  <select
+                    id="rate-why"
+                    value={choice}
+                    onChange={(e) => setChoice(e.target.value as ChatChoice | "")}
+                    className="mb-2 h-11 w-full rounded-lg border border-line bg-surface px-2"
+                  >
+                    <option value="">{t.rateChoose}</option>
+                    {CHAT_CHOICES.map((c) => (
+                      <option key={c} value={c}>
+                        {t.rateChoices[c]}
+                      </option>
+                    ))}
+                  </select>
+                  {choice !== "" && (
+                    <textarea
+                      aria-label={choice === "other" ? t.rateOtherNeeded : t.rateMore}
+                      placeholder={choice === "other" ? t.rateOtherNeeded : t.rateMore}
+                      value={choiceText}
+                      maxLength={1000}
+                      required={choice === "other"}
+                      onChange={(e) => setChoiceText(e.target.value)}
+                      className="mb-2 min-h-16 w-full rounded-lg border border-line bg-surface px-2 py-1.5"
+                    />
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      type="submit"
+                      disabled={!chatRatingFeedback(choice, choiceText)}
+                      className="btn-primary"
+                    >
+                      {t.rateSend}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void rateChat(stars)}
+                      className="h-11 rounded-lg px-3 text-muted hover:bg-subtle"
+                    >
+                      {t.rateSkip}
+                    </button>
+                  </div>
+                </form>
               </li>
             )}
             {rating === "done" && (
@@ -574,13 +858,22 @@ export function Widget({
 
           {messages.length <= 1 && (
             <div className="px-4 pb-2">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-accent">{t.admissions}</p>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-brand">
+                {focus?.label ?? t.admissions}
+              </p>
               <div className="flex flex-wrap gap-2">
-                {(tenant.topics.length ? tenant.topics : tenant.starter_questions).map((topic) => (
-                  <button key={topic} className="chip" onClick={() => void send(topic)}>
-                    {topic}
-                  </button>
-                ))}
+                {(focus?.suggestions ?? (local.topics.length ? local.topics : local.starter_questions)).map(
+                  (topic, i) => (
+                    <button
+                      key={topic}
+                      className={focus ? "chip lux-chip" : "chip"}
+                      style={focus ? { animationDelay: `${450 + i * 110}ms` } : undefined}
+                      onClick={() => void send(topic)}
+                    >
+                      {topic}
+                    </button>
+                  ),
+                )}
               </div>
             </div>
           )}
@@ -598,7 +891,8 @@ export function Widget({
             </div>
           )}
 
-          {listening && (
+          {call && <CallPanel call={call} t={t} onEnd={endCall} />}
+          {!call && listening && (
             <p
               className="mx-4 mb-1 rounded-lg bg-black/80 px-3 py-1.5 text-sm text-white"
               aria-live="assertive"
@@ -606,7 +900,7 @@ export function Widget({
               🎙 {caption}
             </p>
           )}
-          {!listening && caption && !input && (
+          {!call && !listening && caption && !input && (
             <p className="mx-4 mb-1 text-xs text-muted" aria-live="polite" data-voice={voice}>
               {caption}
             </p>
@@ -622,7 +916,7 @@ export function Widget({
             <button
               type="button"
               onClick={() => void toggleVoice()}
-              disabled={voice === "thinking"}
+              disabled={voice === "thinking" || call !== null}
               aria-pressed={listening}
               aria-label={listening ? t.stopSpeak : t.speak}
               className={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${
@@ -687,6 +981,74 @@ export function Widget({
         </>
       )}
     </div>
+  );
+}
+
+type CallState = { status: "connecting" | "listening" | "speaking"; heard: string; said: string };
+
+/** A Retell AI voice call: clearly not push-to-talk. A status that says what is happening, the
+ * latest thing heard and said, and one way out ("End call"). */
+export function CallPanel({
+  call,
+  t,
+  onEnd,
+}: {
+  call: CallState;
+  t: (typeof STRINGS)[Lang];
+  onEnd: () => void;
+}) {
+  const status =
+    call.status === "connecting"
+      ? t.callConnecting
+      : call.status === "speaking"
+        ? t.callSpeaking
+        : t.callListening;
+  return (
+    <section
+      aria-label={t.onCall}
+      className="mx-3 mb-2 rounded-2xl border border-line bg-paper p-3 shadow-sm"
+      data-call={call.status}
+    >
+      <div className="flex items-center gap-3">
+        <span
+          aria-hidden
+          className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-white ${
+            call.status === "speaking" ? "bg-accent" : "bg-brand"
+          } ${call.status === "connecting" ? "opacity-60" : "animate-pulse"}`}
+        >
+          {call.status === "speaking" ? "🔊" : "🎙"}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold" role="status" aria-live="polite">
+            {status}
+          </p>
+          <p className="text-xs text-muted">{t.onCall}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onEnd}
+          className="btn rounded-full bg-red-700 px-4 py-2 text-sm text-white"
+        >
+          {t.endCall}
+        </button>
+      </div>
+      {(call.heard || call.said) && (
+        <dl className="mt-2 space-y-1 text-sm" aria-live="polite">
+          {call.heard && (
+            <div>
+              <dt className="inline font-semibold">{t.callYou}: </dt>
+              <dd className="inline">{call.heard}</dd>
+            </div>
+          )}
+          {call.said && (
+            <div>
+              <dt className="inline font-semibold">{t.callAssistant}: </dt>
+              <dd className="inline">{call.said}</dd>
+            </div>
+          )}
+        </dl>
+      )}
+    </section>
   );
 }
 
@@ -799,6 +1161,38 @@ function Feedback({
 }) {
   const [text, setText] = useState("");
   if (msg.feedback === "sent") return <p className="mt-1.5 text-xs text-muted">{t.thanks}</p>;
+  if (msg.feedback === "detail") {
+    return (
+      <form
+        className="mt-2 flex gap-1"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onRate(-1, msg.feedbackReason, text.trim());
+        }}
+      >
+        <label htmlFor={`detail-${msg.id}`} className="sr-only">
+          {t.tellUs}
+        </label>
+        <input
+          id={`detail-${msg.id}`}
+          className="field text-xs"
+          placeholder={t.tellUs}
+          maxLength={1000}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          autoFocus
+        />
+        <button className="btn-secondary text-xs">{t.send}</button>
+        <button
+          type="button"
+          className="btn-secondary text-xs"
+          onClick={() => onRate(-1, msg.feedbackReason, "")}
+        >
+          {t.skip}
+        </button>
+      </form>
+    );
+  }
   if (msg.feedback === "other") {
     return (
       <form

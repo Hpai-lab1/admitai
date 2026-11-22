@@ -34,6 +34,8 @@ export type Me = {
   departments: string[];
   mfa_enabled: boolean;
   tenant: { id: string; slug: string; name: string; public_key: string; theme: Theme };
+  /** What this server can deliver; the console offers only these (no message that never goes). */
+  channels?: { email?: boolean; sms?: boolean; push?: boolean };
 };
 
 /** FastAPI errors are {detail: string} or {detail: [{msg}]}; turn either into one sentence. */
@@ -153,4 +155,13 @@ export async function staffDownload(path: string, filename: string): Promise<voi
   const a = Object.assign(document.createElement("a"), { href: url, download: filename });
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/** A staff image (e.g. your own photo) as an object URL, or null when there is none. */
+export async function staffImage(path: string): Promise<string | null> {
+  const s = load();
+  const res = await fetch(`${API_URL}${path}`, { headers: { Authorization: `Bearer ${s?.access ?? ""}` } });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new ApiError(res.status, "Could not load the image");
+  return URL.createObjectURL(await res.blob());
 }

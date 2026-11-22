@@ -1,0 +1,59 @@
+{
+ "date": "2026-11-13",
+ "mode": "simulated: signed webhooks in, replies captured in chat.wa_outbox (not sent)",
+ "passed": 11,
+ "total": 11,
+ "checks": [
+  {
+   "check": "verification with the right token echoes the challenge",
+   "ok": true
+  },
+  {
+   "check": "verification with a wrong token is refused",
+   "ok": true
+  },
+  {
+   "check": "an unsigned post is refused",
+   "ok": true
+  },
+  {
+   "check": "a wrongly signed post is refused",
+   "ok": true
+  },
+  {
+   "check": "a payload without messages is accepted and ignored",
+   "ok": true
+  },
+  {
+   "check": "nothing was sent so far",
+   "ok": true
+  },
+  {
+   "check": "a normal question is acknowledged at once (Meta retries slow replies)",
+   "ok": true,
+   "ack_s": 0.033
+  },
+  {
+   "check": "the question is answered on WhatsApp",
+   "ok": true,
+   "answer_s": 3.64,
+   "messages": 1
+  },
+  {
+   "check": "a duplicate delivery is not answered twice",
+   "ok": true
+  },
+  {
+   "check": "two quick messages are answered in the order sent",
+   "ok": true,
+   "order": [
+    0,
+    1
+   ]
+  },
+  {
+   "check": "STOP opts the person out",
+   "ok": true
+  }
+ ]
+}

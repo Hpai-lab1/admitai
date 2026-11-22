@@ -1,0 +1,13 @@
+- file: prospectus-2027-28.md
+  title: Riverside prospectus 2027-28
+  academic_year: 2027-28
+  owner: Admissions
+  owner_role: admission_officer
+  valid_to: 2028-07-31
+- file: mba-curriculum-2027-28.md
+  title: MBA curriculum 2027-28
+  academic_year: 2027-28
+  department: Management
+  owner: Management
+  owner_role: faculty
+  valid_to: 2028-07-31

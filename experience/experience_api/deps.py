@@ -18,7 +18,30 @@ STAFF_ROLES = (
     "admission_officer",
     "faculty",
     "marketing_manager",
+    # Beyond PRD 5.2, for the way colleges staff admissions (README, "Staff roles").
+    "admission_counsellor",
+    "finance_officer",
+    "hostel_warden",
+    "management",
 )
+
+# Each added role works like the PRD role it extends: the same queue and the same database
+# policies (app.policy_role, migration 014). The API then narrows what it may do.
+POLICY_ROLE = {
+    "admission_counsellor": "admission_officer",
+    "finance_officer": "faculty",
+    "hostel_warden": "faculty",
+    "management": "marketing_manager",
+}
+# Roles limited to their departments' handoffs, feedback and approvals.
+DEPARTMENT_ROLES = ("faculty", "finance_officer", "hostel_warden")
+# Roles that work the admission queue.
+ADMISSION_DESK = ("admission_officer", "admission_counsellor")
+
+
+def policy_role(role: str) -> str:
+    """The PRD role whose queue and database policies `role` follows."""
+    return POLICY_ROLE.get(role, role)
 
 
 def settings_dep() -> Settings:

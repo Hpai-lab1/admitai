@@ -5,6 +5,7 @@ import os
 import sys
 import uuid
 from dataclasses import replace
+from datetime import datetime
 from pathlib import Path
 
 import psycopg
@@ -26,12 +27,22 @@ for _k in (
     "KEY_A_TO_C",
     "KB_EXPERIENCE_API_URL",
     "KB_RERANKER",
+    # local.env.sh turns self-learning on for development; tests choose for themselves.
+    "KNOWLEDGE_SELF_LEARNING_ENABLED",
+    "LEARNING_SESSION_SALT",
 ):
     os.environ.pop(_k, None)
 OPS = {"X-Service-Key": "test-ops-key"}
 
 from knowledge_api.config import Settings  # noqa: E402
 from knowledge_api.embedder import HashEmbedder  # noqa: E402
+
+# Background code connects with the worker URL; local.env.sh points it at the real database, so a
+# test run must never inherit it (worker roles, 19 Nov 2026).
+os.environ["KB_WORKER_DATABASE_URL"] = (
+    os.environ.get("KB_TEST_ADMIN_DATABASE_URL", "") or "postgresql://unused"
+)
+
 
 TEST_URL = os.environ.get("KB_TEST_DATABASE_URL", "")
 TEST_ADMIN_URL = os.environ.get("KB_TEST_ADMIN_DATABASE_URL", "")
@@ -59,17 +70,23 @@ def settings(migrated):
         conn.execute(
             "truncate kb.chunks, kb.documents, kb.sources, kb.curated_qa_history, kb.curated_qa,"
             " kb.program_dates, kb.program_fees, kb.programs, kb.sandboxes, learn.events, learn.signals,"
-            " learn.proposals, learn.eval_cases, learn.eval_runs cascade"
+            " learn.proposals, learn.eval_cases, learn.eval_runs, learn.feedback_events,"
+            " learn.feedback_analysis, learn.trust_scores, learn.lessons, learn.lesson_aliases,"
+            " learn.retrieval_boosts, learn.knowledge_versions cascade"
         )
     search.invalidate()
     return replace(
         Settings(),
         database_url=TEST_URL,
         admin_database_url=TEST_ADMIN_URL,
+        # never the real database: local.env.sh points the worker URL there
+        worker_database_url=TEST_ADMIN_URL,
         embedder="hash",
         ops_key="test-ops-key",
         key_from_experience="test-key-from-c",
         key_from_assistant="test-key-from-b",
+        # The gate tests below measure the whole test set; the quick test has its own tests.
+        gate_mode="full",
     )
 
 
@@ -124,14 +141,15 @@ class FakeAssistant:
         return [
             r
             for r in self.reviews
-            if since is None or r["created_at"].isoformat() > since
+            if since is None or r["created_at"] > datetime.fromisoformat(since)
         ]
 
     def signals(self, tenant, since):
         return [
             t
             for t in self.turns
-            if since is None or t["created_at"].isoformat() > since
+            # Times, not text: PostgreSQL's "+05:30" and the turns' "+00:00" do not sort as text.
+            if since is None or t["created_at"] > datetime.fromisoformat(since)
         ]
 
     def ask(self, tenant, conversation_id, text, channel="web_chat"):

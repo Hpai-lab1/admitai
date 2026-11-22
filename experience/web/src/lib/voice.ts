@@ -8,6 +8,8 @@ export type VoiceReply = {
   language: string;
   answer: string;
   outcome: string;
+  /** With expect "rating": the 1-5 rating heard, or null when it was unclear. */
+  rating?: number | null;
   offer_handoff: boolean;
   sources: Source[];
   message_id?: string;
@@ -59,6 +61,7 @@ export async function voiceTurn(
   conversationId: string,
   audio: Blob,
   lang: string,
+  expect?: "rating",
 ): Promise<VoiceReply> {
   const tok = await fetch(`${ASSISTANT_URL}/voice/token`, {
     method: "POST",
@@ -69,6 +72,7 @@ export async function voiceTurn(
   const form = new FormData();
   form.append("token", (await tok.json()).token);
   form.append("language", lang);
+  if (expect) form.append("expect", expect); // a spoken 1-5 rating, not a question
   form.append("audio", audio, "question.webm");
   const res = await fetch(`${ASSISTANT_URL}/voice/turn`, { method: "POST", body: form });
   if (res.status === 429) throw new VoiceError("busy", await tooMany(res));

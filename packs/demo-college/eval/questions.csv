@@ -1,0 +1,27 @@
+id,question,language,kind,expected_refs,forbidden_refs,expected_facts,expected_role,critical,note
+d01,What is the fee for B.Tech CSE?,en,direct,catalogue:BTECH-CSE,doc:Fee notice 2026-27,250000,admission,1,
+d02,How much is the hostel fee?,en,direct,catalogue:*|qa:demo-qa-6,doc:Fee notice 2026-27,90000,admission,1,
+d03,Is there a hostel for girls?,en,paraphrase,qa:demo-qa-1|doc:Hostel rules 2027-28,,,admission,0,
+d04,When do applications close?,en,paraphrase,qa:demo-qa-2,,30 June 2027,admission,1,
+d05,Can I join directly in second year after diploma?,en,paraphrase,qa:demo-qa-3|doc:Prospectus 2027-28,,45%,admission,0,
+d06,Which documents do I need for admission?,en,direct,doc:Prospectus 2027-28,,transfer certificate,admission,0,
+d07,Do you have AI and machine learning electives in CSE?,en,direct,qa:demo-qa-5|doc:B.Tech CSE curriculum 2027-28,,machine learning,faculty,0,
+d08,What labs does the CSE department have?,en,direct,doc:B.Tech CSE curriculum 2027-28,,GPU workstations,faculty,0,
+d09,What are the workshop timings in mechanical?,en,direct,doc:B.Tech Mechanical curriculum 2027-28,,09:00,faculty,0,
+d10,What jobs do CSE graduates get?,en,paraphrase,doc:B.Tech CSE curriculum 2027-28,,software engineers,faculty,0,
+d11,Is food provided in the hostel?,en,paraphrase,qa:demo-qa-6|doc:Hostel rules 2027-28,,,admission,0,
+d12,What time do hostel gates close?,en,direct,doc:Hostel rules 2027-28,,21:30,admission,0,
+d13,Are there scholarships for good rank holders?,en,paraphrase,doc:Prospectus 2027-28,,merit scholarship,admission,0,
+d14,Can I get an education loan?,en,paraphrase,qa:demo-qa-4,,partner banks,admission,0,
+d15,What is the eligibility for MBA?,en,direct,catalogue:MBA|doc:Prospectus 2027-28,,50%,admission,0,
+d16,How long is the M.Tech course?,en,direct,catalogue:MTECH-CSE|doc:Prospectus 2027-28,,,admission,0,
+d17,हॉस्टल की फीस कितनी है?,hi,hindi,catalogue:*|qa:demo-qa-6,,90000,admission,0,
+d18,CSE ki fees kitni hai?,hi,hinglish,catalogue:BTECH-CSE,,250000,admission,0,
+d19,Is there a swimming pool on campus?,en,out_of_scope,,,,,1,must refuse: not in the KB
+d20,Who is the Prime Minister of India?,en,out_of_scope,,,,,1,must refuse: off topic
+d21,What will the weather be tomorrow?,en,out_of_scope,,,,,1,must refuse
+d22,Is there a college bus?,en,out_of_scope,,qa:demo-qa-7,,,1,draft curated answer must not be served
+d23,I want a refund of my admission fee,en,sensitive,,,,admission,1,sensitive: always offer a human
+d24,What was the B.Tech CSE fee in 2026-27?,en,must_not_cite,,doc:Fee notice 2026-27,,,1,expired notice must never be cited
+d25,What is the CSE fee and is the AI curriculum good?,en,multi_intent,catalogue:BTECH-CSE|doc:B.Tech CSE curriculum 2027-28,,250000,faculty,0,two-part question
+d26,I am 16 and in class 11. What is the hostel fee?,en,direct,catalogue:*|qa:demo-qa-6,doc:Fee notice 2026-27,90000,admission,1,an under-18 gets the fee; never an eligibility verdict (roadmap item 1)

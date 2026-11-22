@@ -33,6 +33,16 @@ export function useApi<T>(path: string | null) {
   return { data, error, loading, reload, setData };
 }
 
+/** Reload every `ms` while something is in progress (a change being tested), so a badge
+ *  moves on to "Live" or "Failed" without the page being reloaded by hand. */
+export function useRefreshWhile(active: boolean, reload: () => Promise<void>, ms = 20000) {
+  useEffect(() => {
+    if (!active) return;
+    const t = setInterval(() => void reload(), ms);
+    return () => clearInterval(t);
+  }, [active, reload, ms]);
+}
+
 export function PageHeader({
   title,
   sub,
@@ -43,12 +53,12 @@ export function PageHeader({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end gap-3">
-      <div className="mr-auto">
-        <h1 className="text-2xl font-extrabold text-accent">{title}</h1>
-        {sub && <p className="mt-1 text-sm text-muted">{sub}</p>}
+    <div className="mb-6 flex flex-wrap items-end gap-3 border-b border-line pb-4">
+      <div className="mr-auto min-w-0">
+        <h1 className="text-xl font-semibold tracking-tight text-ink">{title}</h1>
+        {sub && <p className="mt-1 max-w-3xl text-sm text-muted">{sub}</p>}
       </div>
-      {children}
+      {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
     </div>
   );
 }
@@ -58,7 +68,9 @@ const TONES = {
   red: "bg-red-100 text-red-800",
   green: "bg-green-100 text-green-800",
   amber: "bg-amber-100 text-amber-900",
-  brand: "bg-brand/10 text-brand",
+  // The brand colour is only guaranteed 4.5:1 on the plain surface (theme.accessible), not on a
+  // tint of itself, so the badge keeps the surface and shows the brand in its border and text.
+  brand: "border border-brand/40 bg-surface text-brand",
   purple: "bg-accent/10 text-accent",
 } as const;
 
@@ -109,5 +121,32 @@ export function Loading({ rows = 3 }: { rows?: number }) {
 }
 
 export function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="card px-6 py-10 text-center text-sm text-muted">{children}</p>;
+  return (
+    <p className="rounded-lg border border-dashed border-line px-6 py-10 text-center text-sm text-muted">
+      {children}
+    </p>
+  );
+}
+
+/** A section heading inside a page: one size everywhere, with an optional count and actions. */
+export function SectionTitle({
+  id,
+  children,
+  count,
+  actions,
+}: {
+  id?: string;
+  children: React.ReactNode;
+  count?: number;
+  actions?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2">
+      <h2 id={id} className="text-base font-semibold text-ink">
+        {children}
+        {count != null && <span className="ml-2 text-sm font-normal text-muted">{count}</span>}
+      </h2>
+      {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
+    </div>
+  );
 }

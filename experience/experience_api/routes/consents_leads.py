@@ -22,7 +22,14 @@ from ..clients import AssistantRefused, UpstreamError, assistant_post
 from ..config import Settings
 from ..webhooks import cancel_for_lead, emit, lead_data
 from ..db import Context, Jsonb, audit, tx
-from ..deps import require_staff, settings_dep, visitor_context, visitor_or_service
+from ..deps import (
+    ADMISSION_DESK,
+    DEPARTMENT_ROLES,
+    require_staff,
+    settings_dep,
+    visitor_context,
+    visitor_or_service,
+)
 from ..schemas import (
     Consent,
     ConsentIn,
@@ -44,10 +51,16 @@ from .handoffs import has_contact_consent
 router = APIRouter()
 MAX_CODE_ATTEMPTS = 5
 MAX_CODES_PER_HOUR = 5
+# Department roles see only leads linked to their handoffs (RLS). Management sees aggregates in
+# analytics, not the lead list.
 LEAD_READERS = require_staff(
-    "super_admin", "college_admin", "admission_officer", "marketing_manager", "faculty"
+    "super_admin",
+    "college_admin",
+    "marketing_manager",
+    *ADMISSION_DESK,
+    *DEPARTMENT_ROLES,
 )
-LEAD_EDITORS = require_staff("college_admin", "admission_officer")
+LEAD_EDITORS = require_staff("college_admin", *ADMISSION_DESK)
 EXPORTERS = require_staff("college_admin", "admission_officer", "marketing_manager")
 
 

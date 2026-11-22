@@ -1,4 +1,5 @@
 import { request } from "./api";
+import { API_URL } from "./config";
 import { ASSISTANT_URL } from "./config";
 import { SseParser } from "./sse";
 import type { Theme } from "./theme";
@@ -17,6 +18,15 @@ export type TenantInfo = Theme & {
   response_time_hours: number;
   apply_url: string | null;
   announcement: string | null;
+  /** The college's own texts in Hindi and Kannada (PRD F1.6); see localTenant. */
+  translations?: Partial<Record<"hi" | "kn", LocalText>>;
+};
+export type LocalText = {
+  assistant_name?: string | null;
+  greeting?: string | null;
+  announcement?: string | null;
+  starter_questions?: string[];
+  topics?: string[];
 };
 export type WidgetSession = {
   session_id: string;
@@ -57,6 +67,21 @@ export const startSession = (
 export function visitor<T>(token: string, path: string, body: unknown): Promise<T> {
   return request<T>(path, { method: "POST", body: JSON.stringify(body) }, token);
 }
+
+export type HandoffStatus = {
+  status: "none" | "open" | "claimed" | "resolved" | string;
+  queue?: string;
+  department?: string | null;
+  staff_first_name?: string | null;
+};
+
+/** The visitor's own request, for the handoff banner (PRD 13). */
+export const handoffStatus = (token: string, conversationId: string) =>
+  request<HandoffStatus>(
+    `/handoffs/mine?conversation_id=${encodeURIComponent(conversationId)}`,
+    { method: "GET" },
+    token,
+  );
 
 /** A 429 problem response (PRD 12.3) as one sentence, with the wait from Retry-After. */
 export async function tooMany(res: Response): Promise<string> {
@@ -137,6 +162,18 @@ export async function recoverAnswer(
   return null;
 }
 
+export type StoredTurn = RecoveredAnswer & { question: string | null };
+
+/** The newest question and answer stored in the visitor's conversation, or null. A Retell voice
+ *  call is answered by Module B in this same conversation, so this is how its turns reach the chat. */
+export async function lastTurn(conversationId: string, sessionToken: string): Promise<StoredTurn | null> {
+  const res = await fetch(`${ASSISTANT_URL}/chat/${encodeURIComponent(conversationId)}/last`, {
+    headers: { Authorization: `Bearer ${sessionToken}` },
+  }).catch(() => null);
+  if (!res?.ok) return null;
+  return (await res.json()) as StoredTurn;
+}
+
 /** Fire-and-forget conversation event (PRD F8.3 implicit signals; 3.5 metric counts). */
 export function logEvent(token: string, conversationId: string, kind: string, messageId?: string): void {
   void visitor(token, "/conversation-events", {
@@ -157,4 +194,42 @@ export function quickReplies(suggested: string[], asked: string[], n = 3): strin
 export function isLong(text: string, maxLines = 12, perLine = 45): boolean {
   const lines = text.split("\n").reduce((n, p) => n + Math.max(1, Math.ceil(p.length / perLine)), 0);
   return lines > maxLines;
+}
+
+export type ConsentRecord = {
+  purpose: string;
+  granted: boolean;
+  given_by: "self" | "guardian";
+  text_version: string;
+  captured_at: string;
+  withdrawn_at: string | null;
+};
+
+/** The consents this visitor gave in this session (GET /consents). */
+export const myConsents = (token: string) => request<ConsentRecord[]>("/consents", {}, token);
+
+/** True when the visitor's latest own answer to the contact consent, for the wording shown now,
+ *  is a yes that was not withdrawn: then the widget does not ask again in the same chat. */
+export function hasContactConsent(list: ConsentRecord[], textVersion: string): boolean {
+  const latest = list
+    .filter((c) => c.purpose === "contact" && c.given_by === "self")
+    .sort((a, b) => a.captured_at.localeCompare(b.captured_at))
+    .at(-1);
+  return !!latest && latest.granted && !latest.withdrawn_at && latest.text_version === textVersion;
+}
+
+export type ApprovedAnswer = { question: string; answer: string };
+
+/** Degraded mode (PRD 10.2): the college's approved answers, for when the assistant is down. */
+export const fallbackAnswers = (token: string) =>
+  request<{ items: ApprovedAnswer[] }>("/widget/fallback-answers", {}, token).then((r) => r.items);
+
+/** Photo of the staff member who claimed the visitor's request, as an object URL; null if none. */
+export async function handoffPhoto(token: string, conversationId: string): Promise<string | null> {
+  const q = new URLSearchParams({ conversation_id: conversationId });
+  const res = await fetch(`${API_URL}/handoffs/mine/photo?${q}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  }).catch(() => null);
+  if (!res || !res.ok) return null; // no photo, or not now: the banner shows the name alone
+  return URL.createObjectURL(await res.blob());
 }

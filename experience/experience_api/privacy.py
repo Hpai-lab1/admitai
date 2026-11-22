@@ -132,6 +132,24 @@ def purge_old_audit(admin_url: str) -> int:
         ).rowcount
 
 
+# When the service last swept, and what happened (shown by /health): empty until the first run.
+LAST_SWEEP: dict = {}
+
+
+def sweep_all(s: Settings) -> dict:
+    """Every college's retention sweep and the audit purge: run daily by the service
+    (RETENTION_SWEEP_HOURS) and by `python -m experience_api.privacy retention`."""
+    with psycopg.connect(s.worker_database_url) as conn:
+        tenants = [
+            r[0] for r in conn.execute("select id from app.tenants order by slug")
+        ]
+    out = {str(tid): retention_sweep(s, tid) for tid in tenants}
+    return {
+        "tenants": out,
+        "audit_rows_removed": purge_old_audit(s.worker_database_url),
+    }
+
+
 if __name__ == "__main__":
     from .clients import dispatch_events
 
@@ -139,9 +157,9 @@ if __name__ == "__main__":
     ap.add_argument("command", choices=["retention", "outbox"])
     a = ap.parse_args()
     s = Settings()
-    if not (s.database_url and s.admin_database_url):
+    if not (s.database_url and s.worker_database_url):
         sys.exit("Set DATABASE_URL and ADMIN_DATABASE_URL (source local.env.sh)")
-    with psycopg.connect(s.admin_database_url) as conn:
+    with psycopg.connect(s.worker_database_url) as conn:
         tenants = [
             r[0] for r in conn.execute("select id from app.tenants order by slug")
         ]
@@ -153,4 +171,6 @@ if __name__ == "__main__":
         else:
             print(tid, retention_sweep(s, tid))
     if a.command == "retention":
-        print("audit rows past 3 years removed:", purge_old_audit(s.admin_database_url))
+        print(
+            "audit rows past 3 years removed:", purge_old_audit(s.worker_database_url)
+        )

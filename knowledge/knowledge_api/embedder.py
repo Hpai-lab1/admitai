@@ -51,7 +51,13 @@ class OllamaEmbedder:
         for start in range(0, len(inputs), 32):
             r = httpx.post(
                 self.url,
-                json={"model": self.model, "input": inputs[start : start + 32]},
+                # keep_alive: the search model stays loaded between questions (Ollama's
+                # default is 5 minutes; reloading it slowed the first search after a pause).
+                json={
+                    "model": self.model,
+                    "input": inputs[start : start + 32],
+                    "keep_alive": "30m",
+                },
                 timeout=300,
             )
             r.raise_for_status()

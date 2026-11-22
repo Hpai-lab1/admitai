@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import secrets
 import sys
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
 import psycopg
@@ -54,6 +55,34 @@ DEMO = {
             "Hostel",
             "Fees",
         ],
+        "translations": {
+            # Written without a native speaker: have them reviewed before real use. The Kannada
+            # suggestions are questions the Kannada assistant answers from the catalogue.
+            "kn": {
+                "assistant_name": "ಪ್ರವೇಶ ಸಹಾಯಕ",
+                "greeting": "ನಮಸ್ಕಾರ! ಕೋರ್ಸ್‌ಗಳ ಶುಲ್ಕ, ಅವಧಿ ಮತ್ತು ಪ್ರವೇಶ ದಿನಾಂಕಗಳ ಬಗ್ಗೆ ಕೇಳಿ. ಬೇರೆ "
+                "ಪ್ರಶ್ನೆಗಳಿಗೆ ನಮ್ಮ ಪ್ರವೇಶ ತಂಡ ಸಹಾಯ ಮಾಡುತ್ತದೆ.",
+                "announcement": "2026ರ ಪ್ರವೇಶಗಳು ಆರಂಭವಾಗಿವೆ – ಪದವಿ ಮತ್ತು ಸ್ನಾತಕೋತ್ತರ ಕೋರ್ಸ್‌ಗಳು",
+                "starter_questions": [
+                    "ಬಿ.ಟೆಕ್ ಸಿಎಸ್‌ಇ ಶುಲ್ಕ ಎಷ್ಟು?",
+                    "ಹಾಸ್ಟೆಲ್ ಶುಲ್ಕ ಎಷ್ಟು?",
+                    "ಅರ್ಜಿ ಸಲ್ಲಿಸಲು ಕೊನೆಯ ದಿನಾಂಕ ಯಾವುದು?",
+                    "ಎಂ.ಟೆಕ್ ಕೋರ್ಸ್‌ನ ಅವಧಿ ಎಷ್ಟು?",
+                ],
+            },
+            "hi": {
+                "assistant_name": "प्रवेश सहायक",
+                "greeting": "नमस्ते! कोर्स की फीस, अवधि और प्रवेश की तिथियों के बारे में पूछिए। बाकी "
+                "प्रश्नों में हमारी प्रवेश टीम मदद करेगी।",
+                "announcement": "2026 के लिए प्रवेश शुरू – स्नातक और स्नातकोत्तर कार्यक्रम",
+                "starter_questions": [
+                    "बी.टेक सीएसई की फीस कितनी है?",
+                    "हॉस्टल की फीस कितनी है?",
+                    "आवेदन की अंतिम तिथि क्या है?",
+                    "एम.टेक की अवधि कितनी है?",
+                ],
+            },
+        },
     },
 }
 OTHER = {
@@ -70,6 +99,21 @@ STAFF = [
     ("marketing@example.com", "Mira Marketing", "marketing_manager", []),
     ("platform@example.com", "Priya Platform", "super_admin", []),
 ]
+
+
+PASSWORD_FILE = Path(__file__).resolve().parents[2] / ".local" / "demo-password.txt"
+
+
+def _saved(pw: str) -> str:
+    """A generated password goes to a file only its owner can read (.local/ is git-ignored), not
+    to the screen or a log; the returned text says where it is."""
+    PASSWORD_FILE.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(PASSWORD_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(pw + "\n")
+    return (
+        f"(generated; saved in {PASSWORD_FILE.relative_to(PASSWORD_FILE.parents[1])})"
+    )
 
 
 def _password() -> tuple[str, bool]:
@@ -383,7 +427,7 @@ def seed(admin_url: str) -> str:
             " values (%s, 'admin@example.org', 'Other Admin', 'college_admin', %s)",
             (other, hash_password(pw)),
         )
-    return pw if generated else "(DEMO_PASSWORD from .env)"
+    return _saved(pw) if generated else "(DEMO_PASSWORD from .env)"
 
 
 if __name__ == "__main__":

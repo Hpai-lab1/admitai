@@ -1,0 +1,4 @@
+code,name,aliases,department,level,duration_months,intake,eligibility,contact,academic_year
+BCOM,Bachelor of Commerce,B.Com|BCom,Commerce,UG,36,180,"Class 12 in any stream with at least 45%",admissions@riverside.example,2027-28
+BBA,Bachelor of Business Administration,BBA,Management,UG,36,120,"Class 12 in any stream with at least 50%",admissions@riverside.example,2027-28
+MBA,Master of Business Administration,MBA|PGDM,Management,PG,24,60,"Any bachelor's degree with at least 50% and a valid CAT, MAT or KMAT score",admissions@riverside.example,2027-28

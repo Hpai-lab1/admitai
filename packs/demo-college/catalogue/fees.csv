@@ -1,0 +1,19 @@
+program_code,category,component,amount,currency,period
+BTECH-CSE,general,tuition,250000,INR,per year
+BTECH-CSE,management,tuition,412500,INR,per year
+BTECH-ME,general,tuition,210000,INR,per year
+BTECH-ME,management,tuition,330000,INR,per year
+BTECH-CE,general,tuition,190000,INR,per year
+BTECH-CE,management,tuition,300000,INR,per year
+MTECH-CSE,general,tuition,180000,INR,per year
+MBA,general,tuition,300000,INR,per year
+BTECH-CSE,general,hostel,90000,INR,per year
+BTECH-ME,general,hostel,90000,INR,per year
+BTECH-CE,general,hostel,90000,INR,per year
+MTECH-CSE,general,hostel,90000,INR,per year
+MBA,general,hostel,90000,INR,per year
+BTECH-CSE,general,application,1200,INR,one time
+BTECH-ME,general,application,1200,INR,one time
+BTECH-CE,general,application,1200,INR,one time
+MTECH-CSE,general,application,1500,INR,one time
+MBA,general,application,1500,INR,one time

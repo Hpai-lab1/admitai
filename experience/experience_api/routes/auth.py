@@ -12,7 +12,16 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
-from ..ratelimit import limit_sessions
+from ..ratelimit import (
+    check_login,
+    check_mfa,
+    limit_sessions,
+    login_failed,
+    login_passed,
+    mfa_failed,
+    mfa_passed,
+)
+from .. import messaging
 from ..config import Settings, token_keys
 from ..db import Context, Jsonb, audit, set_profile, tx
 from ..deps import service_context, settings_dep, staff_context
@@ -84,16 +93,27 @@ def _issue_tokens(cur, settings: Settings, tenant_id: UUID, profile: dict) -> To
     )
 
 
+# PRD 12.3: documented so callers know to wait for Retry-After (ratelimit.check_login, check_mfa).
+TOO_MANY_FAILURES = {
+    429: {
+        "description": "Too many failed attempts; wait for the number of seconds in Retry-After"
+    }
+}
+
+
 @router.post(
     "/auth/login",
     response_model=Tokens | MfaChallenge,
     summary="Staff sign-in; admins must complete MFA (PRD 5.4)",
+    responses=TOO_MANY_FAILURES,
 )
-def login(body: LoginIn, settings: Settings = Depends(settings_dep)):
+def login(body: LoginIn, request: Request, settings: Settings = Depends(settings_dep)):
+    keys = check_login(request, settings, f"{body.tenant}|{body.email}")
     with tx(settings.database_url, None) as cur:
         tenant = _tenant(cur, body.tenant.lower())
     if not tenant:
         verify_password(body.password, "scrypt$16384$8$1$00$00")  # same work either way
+        login_failed(settings, keys)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, BAD_LOGIN)
     ctx = Context(tenant["id"], "login")
     with tx(settings.database_url, ctx) as cur:
@@ -106,7 +126,9 @@ def login(body: LoginIn, settings: Settings = Depends(settings_dep)):
             or not p["is_active"]
             or not verify_password(body.password, p["password_hash"])
         ):
+            login_failed(settings, keys)
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, BAD_LOGIN)
+        login_passed(settings, keys)
         set_profile(
             cur, p["id"]
         )  # lets the RLS policies see this as the person's own row
@@ -151,14 +173,16 @@ def _dev_code(settings: Settings, code: str) -> bool:
     "/auth/mfa",
     response_model=Tokens,
     summary="Second step: TOTP code from an authenticator app",
+    responses=TOO_MANY_FAILURES,
 )
-def mfa(body: MfaIn, settings: Settings = Depends(settings_dep)):
+def mfa(body: MfaIn, request: Request, settings: Settings = Depends(settings_dep)):
     claims = read_token(token_keys(settings), body.mfa_token, "mfa")
     if not claims:
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED, "The sign-in took too long; start again"
         )
     tenant_id, profile_id = UUID(claims["tid"]), UUID(claims["sub"])
+    check_mfa(settings, str(profile_id))
     with tx(
         settings.database_url, Context(tenant_id, "login", profile_id=profile_id)
     ) as cur:
@@ -173,10 +197,12 @@ def mfa(body: MfaIn, settings: Settings = Depends(settings_dep)):
                 or _dev_code(settings, body.code)
             )
         ):
+            mfa_failed(settings, str(profile_id))
             raise HTTPException(
                 status.HTTP_401_UNAUTHORIZED,
                 "That code is not right; check the time on your phone",
             )
+        mfa_passed(settings, str(profile_id))
         if not p["mfa_enabled"]:
             cur.execute(
                 "update app.profiles set mfa_enabled = true, updated_at = now() where id = %s",
@@ -274,6 +300,11 @@ def me(
         role=p["role"],
         departments=list(ctx.departments),
         mfa_enabled=p["mfa_enabled"],
+        channels={
+            "email": messaging.email_configured(settings),
+            "sms": messaging.sms_configured(settings),
+            "push": bool(settings.vapid_private_key_file),
+        },
         tenant={
             "id": str(t["id"]),
             "slug": t["slug"],

@@ -15,7 +15,9 @@ from uuid import UUID
 
 import numpy as np
 
+from . import paraphrase
 from .db import tx
+from .selflearn import live as live_lessons
 from .embedder import Embedder, uses_local_script
 
 RRF_K = 60
@@ -260,11 +262,15 @@ def search(
     today: date | None = None,
     mode: str = "hybrid",
     reranker=None,
+    lessons: bool | None = None,
 ) -> dict:
     """mode: hybrid (default), dense (vector only) or keyword (full-text only), for comparisons.
     With a `reranker`, a hybrid search's best candidates are reordered by the cross-encoder
-    (PRD 9.4), except for Indic-script questions, which it does not understand."""
+    (PRD 9.4), except for Indic-script questions, which it does not understand.
+    lessons: apply live self-learning lessons (aliases, boosts); None = KNOWLEDGE_SELF_LEARNING_ENABLED.
+    """
     tenant = str(tenant_id)
+    use_lessons = live_lessons.enabled() if lessons is None else lessons
     today = today or date.today()
     idx = _index(database_url, tenant)
     allowed_pos = [
@@ -288,9 +294,23 @@ def search(
     )
     model = embedder.ml if use_ml else embedder
     matrix = idx.matrix_ml if use_ml else idx.matrix
+    # A paraphrased question also carries the words the pages use ("seats" -> "intake").
+    asked, query = query, paraphrase.expand(query)
+    aliases, boosts = (
+        live_lessons.load(database_url, tenant) if use_lessons else ([], [])
+    )
+    if aliases:
+        query = live_lessons.expand(query, asked, aliases)
     qvec = np.asarray(model.query(query), dtype=np.float32)
     qvec /= max(float(np.linalg.norm(qvec)), 1e-9)
     allowed_ids = {idx.ids[i] for i in allowed_pos}
+    boosted: list[tuple[str, dict]] = []  # (chunk id, live boost) for this question
+    if boosts and not use_ml:
+        servable_meta = {idx.ids[i]: idx.meta[i] for i in allowed_pos}
+        for _sim, b in live_lessons.matching(qvec, boosts)[:1]:
+            cid = live_lessons.target(b, servable_meta)
+            if cid is not None:
+                boosted.append((cid, b))
     keyword_rank = (
         _keyword_ranks(database_url, tenant, query, allowed_ids)
         if mode != "dense"
@@ -305,7 +325,7 @@ def search(
             today,
             academic_year,
             department,
-            keyword_rank,
+            keyword_rank + [cid for cid, _ in boosted],
         )
         vector_rank = [i for i in vector_rank if i in allowed_ids]
         for cid in keyword_rank:
@@ -336,43 +356,56 @@ def search(
     ranked = sorted(
         fused, key=lambda cid: (fused[cid], vector_score[cid]), reverse=True
     )
+
+    def make_item(cid: str, score: float) -> dict:
+        m = by_id[cid]
+        return {
+            "id": cid,
+            "kind": m["kind"],
+            "content": m["content"],
+            "score": round(score, 6),
+            "vector_score": round(vector_score.get(cid, 0.0), 4),
+            "keyword_hit": cid in keyword_rank,
+            "citation": {
+                "source_type": "document" if m["kind"] == "chunk" else "curated_qa",
+                "document_id": m["document_id"],
+                "qa_id": cid if m["kind"] == "curated_qa" else None,
+                "title": m["title"],
+                "heading_path": m["heading_path"],
+                "page": m["page"],
+                "academic_year": m["academic_year"],
+                "department": m["department"],
+                "valid_to": m["valid_to"].isoformat() if m["valid_to"] else None,
+                "url": m["url"],
+            },
+        }
+
     items = []
     for cid in ranked:
         if vector_score[cid] < min_score and cid not in keyword_rank[:3]:
             continue
-        m = by_id[cid]
-        items.append(
-            {
-                "id": cid,
-                "kind": m["kind"],
-                "content": m["content"],
-                "score": round(fused[cid], 6),
-                "vector_score": round(vector_score[cid], 4),
-                "keyword_hit": cid in keyword_rank,
-                "citation": {
-                    "source_type": "document" if m["kind"] == "chunk" else "curated_qa",
-                    "document_id": m["document_id"],
-                    "qa_id": cid if m["kind"] == "curated_qa" else None,
-                    "title": m["title"],
-                    "heading_path": m["heading_path"],
-                    "page": m["page"],
-                    "academic_year": m["academic_year"],
-                    "department": m["department"],
-                    "valid_to": m["valid_to"].isoformat() if m["valid_to"] else None,
-                    "url": m["url"],
-                },
-            }
-        )
+        items.append(make_item(cid, fused[cid]))
         if len(items) >= limit:
             break
     if rerank and len(items) > 1:
         # With its document and section: "Graduates work in automotive ..." answers a question
         # about CSE jobs only if the reranker cannot see it comes from the Mechanical curriculum.
         texts = [_with_context(i) for i in items]
-        for item, score in zip(items, reranker.scores(query, texts)):
+        for item, score in zip(items, reranker.scores(asked, texts)):
             item["rerank_score"] = round(score, 4)
         items.sort(key=lambda i: i["rerank_score"], reverse=True)
     items = items[:top_k]
+    for cid, b in boosted:
+        # A live lesson: for questions like the one it was learnt from, the passage its evidence
+        # came from comes first (its vector score unchanged).
+        if vector_score.get(cid, 0.0) < min_score and cid not in keyword_rank:
+            continue
+        top = max((i["score"] for i in items), default=0.0)
+        pinned = {
+            **make_item(cid, max(top, fused.get(cid, 0.0)) + 1e-6),
+            "lesson_id": b["lesson_id"],
+        }
+        items = [pinned, *[i for i in items if i["id"] != cid]][:top_k]
     best = max((vector_score[c] for c in allowed_ids if c in vector_score), default=0.0)
     if items:
         _touch_curated(

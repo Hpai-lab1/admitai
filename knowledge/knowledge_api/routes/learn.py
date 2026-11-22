@@ -3,9 +3,11 @@ Delivery is at-least-once, so events are de-duplicated by (tenant, event_id)."""
 
 from __future__ import annotations
 
+import logging
+
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from ..config import Settings
@@ -13,6 +15,7 @@ from ..db import Jsonb, tx
 from ..deps import settings_dep, tenant_dep
 from ..learning import erase_conversations
 
+log = logging.getLogger("admitai.learn")
 router = APIRouter(tags=["learning"])
 
 EVENT_TYPES = {
@@ -31,8 +34,26 @@ class EventIn(BaseModel):
     data: dict
 
 
+def _propose_now(request: Request, settings: Settings, tenant: str) -> None:
+    """A staff correction is a deliberate fix: it becomes a proposal in the approval inbox at
+    once, not at the nightly run (an admin saw "nothing in Approvals" after correcting). Only the
+    two steps it needs; weak signals such as a thumbs-down still wait to be grouped nightly."""
+    from .. import learning
+
+    try:
+        learning.ingest(settings, request.app.state.assistant, tenant)
+        learning.propose(settings, request.app.state.embedder, tenant)
+    except Exception:  # noqa: BLE001 - the nightly run picks it up if this fails
+        log.exception("could not turn a correction into a proposal at once")
+
+
 @router.post("/events", summary="Receive an event from Module C (idempotent)")
-def receive(body: EventIn, settings: Settings = Depends(settings_dep)):
+def receive(
+    body: EventIn,
+    background: BackgroundTasks,
+    request: Request,
+    settings: Settings = Depends(settings_dep),
+):
     if body.type not in EVENT_TYPES:
         raise HTTPException(422, f"Unknown event type {body.type}")
     with tx(settings.database_url, body.tenant_id) as cur:
@@ -52,6 +73,8 @@ def receive(body: EventIn, settings: Settings = Depends(settings_dep)):
                 (str(body.event_id),),
             )
             return {"ok": True, "duplicate": duplicate, "erased": erased}
+    if body.type == "correction.submitted" and not duplicate:
+        background.add_task(_propose_now, request, settings, str(body.tenant_id))
     return {"ok": True, "duplicate": duplicate}
 
 
