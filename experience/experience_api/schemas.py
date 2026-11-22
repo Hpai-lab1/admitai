@@ -41,7 +41,9 @@ FeedbackReason = Literal[
     "wrong", "outdated", "incomplete", "not_what_i_asked", "hard_to_understand", "other"
 ]
 
-EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+# The domain as dot-separated labels: "[^@\s]+\.[^@\s]+" could split a long dotted domain in
+# many ways (slow on crafted input).
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s.]+(?:\.[^@\s.]+)+$")
 PHONE_RE = re.compile(r"^\+[1-9]\d{7,14}$")  # E.164
 
 

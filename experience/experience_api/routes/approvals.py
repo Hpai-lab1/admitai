@@ -3,6 +3,7 @@ knowledge base; Module C shows them to the right people and records their decisi
 
 from __future__ import annotations
 
+import logging
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -11,6 +12,8 @@ from ..config import Settings
 from ..db import Context, audit, tx
 from ..deps import DEPARTMENT_ROLES, require_staff, settings_dep
 from ..schemas import DecideIn, DelegatesIn, PeakSeasonIn, SecondReviewIn
+
+log = logging.getLogger("admitai.approvals")
 
 router = APIRouter(tags=["approvals"])
 # An admission counsellor suggests corrections but approves none (README, "Staff roles").
@@ -289,7 +292,14 @@ def decide(
             )
             results.append({"id": pid, "ok": True})
         except UpstreamError as exc:
-            results.append({"id": pid, "ok": False, "error": str(exc)})
+            log.warning("improvement %s not %s: %s", pid, body.decision, exc)
+            results.append(
+                {
+                    "id": pid,
+                    "ok": False,
+                    "error": "The knowledge service could not record this decision; try again",
+                }
+            )
     with tx(settings.database_url, ctx) as cur:
         for r in results:
             if r["ok"]:

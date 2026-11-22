@@ -199,9 +199,9 @@ def preferences(text: str) -> Preferences:
             break
     if lang is None and output is None:
         return Preferences(None, None, text, False)
-    question = re.sub(r"\s+([?.!,])", r"\1", re.sub(r"\s{2,}", " ", rest)).strip(
-        " ,;:-–"
-    )
+    # Spaces collapsed first, so the space before a mark is a single one (r"\s+([?.!,])" on a
+    # long run of spaces without a mark is slow).
+    question = re.sub(r" ([?.!,])", r"\1", re.sub(r"\s+", " ", rest)).strip(" ,;:-–")
     only = not _content_words(question)
     return Preferences(lang, output, "" if only else question, only)
 

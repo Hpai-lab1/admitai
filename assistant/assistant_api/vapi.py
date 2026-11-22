@@ -329,9 +329,8 @@ def main() -> int:
     s = Settings()
     if a.cmd == "register":
         store.register_channel(s.database_url, a.tenant_id, CHANNEL, a.phone_number_id)
-        print(
-            f"Calls on Vapi number {a.phone_number_id} are answered for {a.tenant_id}"
-        )
+        # the number's id is not printed: it is in the command just typed
+        print(f"Calls on that Vapi number are answered for {a.tenant_id}")
     return 0
 
 

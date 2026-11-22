@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import secrets
 import sys
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
 import psycopg
@@ -98,6 +99,21 @@ STAFF = [
     ("marketing@example.com", "Mira Marketing", "marketing_manager", []),
     ("platform@example.com", "Priya Platform", "super_admin", []),
 ]
+
+
+PASSWORD_FILE = Path(__file__).resolve().parents[2] / ".local" / "demo-password.txt"
+
+
+def _saved(pw: str) -> str:
+    """A generated password goes to a file only its owner can read (.local/ is git-ignored), not
+    to the screen or a log; the returned text says where it is."""
+    PASSWORD_FILE.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(PASSWORD_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(pw + "\n")
+    return (
+        f"(generated; saved in {PASSWORD_FILE.relative_to(PASSWORD_FILE.parents[1])})"
+    )
 
 
 def _password() -> tuple[str, bool]:
@@ -411,7 +427,7 @@ def seed(admin_url: str) -> str:
             " values (%s, 'admin@example.org', 'Other Admin', 'college_admin', %s)",
             (other, hash_password(pw)),
         )
-    return pw if generated else "(DEMO_PASSWORD from .env)"
+    return _saved(pw) if generated else "(DEMO_PASSWORD from .env)"
 
 
 if __name__ == "__main__":

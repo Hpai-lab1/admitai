@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import asyncio
 import base64
 import re
@@ -20,6 +21,8 @@ from ..auth import Caller, caller, service_only, visitor_limits
 from ..engine import Deps
 from ..experience_client import ExperienceError
 from .chat import deps_dep
+
+log = logging.getLogger("admitai.voice")
 
 router = APIRouter(tags=["voice"])
 TOKEN_MINUTES = 10
@@ -132,7 +135,9 @@ def voice_token(
             )
             out["retell"] = web
         except retell.RetellError as exc:
-            out["retell_error"] = str(exc)  # push-to-talk still works
+            # push-to-talk still works; the details go to the log, not to the visitor
+            log.warning("retell call not started: %s", exc)
+            out["retell_error"] = "The voice call could not be started"
     if s.livekit_url and s.livekit_api_key and s.livekit_api_secret:
         # PRD F2.1 / 12.1: a short-lived LiveKit room token for this visitor and conversation.
         # The push-to-talk token above stays, so a widget without WebRTC keeps working.

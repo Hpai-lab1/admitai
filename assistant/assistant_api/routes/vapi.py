@@ -113,7 +113,9 @@ async def answer_turn(request: Request, deps: Deps = Depends(deps_dep)):
         "vapi turn: call %s known=%s secret=%s keys=%s stream=%s",
         call.get("id"),
         known is not None,
-        authed,
+        "yes"
+        if authed
+        else "no",  # a fixed word, never anything derived from the secret
         sorted(body)[:12],
         body.get("stream"),
     )

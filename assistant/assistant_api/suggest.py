@@ -171,7 +171,9 @@ AFFIRMATIVE = re.compile(
     r"^\s*(yes|yeah|yea|yep|yup|ya|yah|sure|correct|right|exactly|that'?s right|that one|"
     # (?=...) not \b: a word boundary fails after a Devanagari or Kannada vowel sign ("हाँ").
     r"ok(ay)?|haan ji|haan?|ha|ji|houdu|hudu|sari|ಹೌದು|हाँ|हां|हा)(?=[\s.!,]|$)"
-    r"[\s.!,]*(please|it is|i did)?[\s.!]*$",
+    # One run of spaces and punctuation, then an optional word with its own run: two runs side by
+    # side could split the same spaces in many ways (slow on "ya" + many tabs).
+    r"[\s.!,]*(?:(please|it is|i did)[\s.!]*)?$",
     re.IGNORECASE,
 )
 NEGATIVE = re.compile(

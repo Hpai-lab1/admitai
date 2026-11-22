@@ -213,7 +213,7 @@ def process(
         cls=analysis.cls,
         model=analysis.model,
         trust=t.score,
-        trusted=trusted,
+        trusted="yes" if trusted else "no",
     )
     result = {
         "feedback_id": fid,

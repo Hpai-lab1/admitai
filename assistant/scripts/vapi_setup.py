@@ -124,9 +124,10 @@ def connect(phone_number_id: str, public_url: str, tenant_id: str) -> int:
         cwd=os.path.dirname(here),
         check=True,
     )
-    print(f"Inbound calls on {phone_number_id} now reach {base}/voice/vapi/webhook.")
+    # The number's id is not printed (logs and screen shares): it is the one just passed.
+    print(f"Inbound calls on that number now reach {base}/voice/vapi/webhook.")
     print("For outbound calls add to local.secrets.sh, then restart Module B:")
-    print(f'export VAPI_PHONE_NUMBER_ID="{phone_number_id}"')
+    print('export VAPI_PHONE_NUMBER_ID="<the --phone-number-id you just used>"')
     print(f'export VAPI_PUBLIC_URL="{base}"   # again after every tunnel restart')
     return 0
 
